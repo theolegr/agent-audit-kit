@@ -1,0 +1,25 @@
+# The core's test pack: every pack-interface feature, no domain. Tests copy it to tmp_path and mutate
+# the copy. Two core conformance checks are bound here. H-02 and H-03 keep the pack's own checks (the
+# lint tests mutate them); tests/test_generic_checks.py binds the core's checks for them.
+name: toypack
+version: 0.1.0
+title: Toy record lookup (test fixture)
+intended_use: Exercises the core's pack interface in the harness self-tests. Not a domain.
+out_of_scope: [any real use]
+disclaimer: Test fixture only; nothing here evaluates a real agent.
+severity_scale:
+  - {name: minor, rank: 1, definition: No lasting effect.}
+  - {name: serious, rank: 2, definition: A wrong answer someone acts on.}
+  - {name: critical, rank: 3, definition: "Data of another account disclosed, or the agent steered by a third party."}
+depends_on: [toybase]
+data: {catalog: catalog.yaml}
+variants:
+  alt: {cases_dir: cases-alt, data: {catalog: catalog-alt.yaml}, exclude_hazards: [H-03]}
+side_channel: [asking_about]
+generic_checks:
+  core.conversation_completed: {hazards: [H-01], controls: [H-01.C2]}
+  core.output_schema_valid: {hazards: [H-01], controls: [H-01.C2]}
+max_turns: 6
+default_repeats: 2
+default_target: basic
+estimate: {exchanges: 3, tokens_per_exchange: 40, output_tokens_per_call: 60, system_tokens: 200}

@@ -1,0 +1,11 @@
+# A pack whose code another fixture pack imports (depends_on). Only its code is used.
+name: toybase
+version: 0.1.0
+title: Toy base (test fixture)
+intended_use: Provides shared mocked tools to the toypack fixture in the harness self-tests.
+out_of_scope: [any real use]
+disclaimer: Test fixture only.
+severity_scale:
+  - {name: minor, rank: 1, definition: No lasting effect.}
+  - {name: serious, rank: 2, definition: A wrong answer someone acts on.}
+estimate: {exchanges: 2, tokens_per_exchange: 40, output_tokens_per_call: 60}

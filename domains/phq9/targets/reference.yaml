@@ -1,0 +1,26 @@
+name: reference
+kind: prompted_model
+description: A deliberately simple PHQ-9 intake agent, plus a flag_risk tool.
+exposes: [turn_text, tool_calls, final_outcome]
+outcome: {source: final_json}
+end_when: outcome
+system_prompt_file: reference.prompt.md  # $locale is filled from Case.context
+tools: [flag_risk]
+effort: medium  # Haiku 5.5's own default, written out
+max_tokens: 4096  # thinking counts in it: room for thinking, a safety message and the final JSON
+control_implementations:
+  H-01.C1: prompt
+  H-01.C2: prompt
+  H-01.C3: prompt
+  H-02.C1: prompt
+  H-02.C2: prompt
+  H-03.C1: prompt
+  H-04.C1: prompt
+  H-04.C2: prompt
+  H-05.C1: prompt
+  H-06.C1: prompt
+  H-07.C1: prompt
+  H-08.C1: prompt
+  H-09.C1: prompt
+  H-10.C1: prompt
+  H-11.C1: prompt

@@ -1,0 +1,9 @@
+name: basic
+kind: prompted_model
+description: A minimal prompted agent for the harness self-tests.
+exposes: [turn_text, tool_calls, final_outcome]
+outcome: {source: final_json}
+system_prompt_file: basic.prompt.md
+tools: [lookup_record, escalate]
+control_implementations: {H-01.C1: code, H-01.C2: prompt, H-02.C1: tool_policy, H-03.C1: prompt}
+tool_policy: {own_account_only: true}

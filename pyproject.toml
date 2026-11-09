@@ -1,0 +1,45 @@
+[project]
+name = "agent-audit-kit"
+version = "0.1.0"
+description = "Risk-based evaluation harness for conversational LLM agents"
+readme = "README.md"
+license = "MIT"
+requires-python = "==3.12.*"            # uv downloads 3.12 on the first `uv sync`
+dependencies = [
+  "anthropic>=0.40",   # model client for the reference agent and the simulator (exact version locked in uv.lock)
+  "pydantic>=2.7,<3",  # typed, validated models for every file the harness reads or writes
+  "pyyaml>=6.0.1",     # packs are hand-edited YAML
+]
+# Nothing else at runtime: .env is read by a 10-line parser, the report is f-strings, statistics use the stdlib,
+# argparse is the CLI. httpx arrives with anthropic; it is declared only when the HTTP adapter is built.
+
+[project.scripts]
+eval = "auditkit.cli:console"  # reads ./.env, then main()
+auditkit = "auditkit.cli:console"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "auditkit"                  # import name differs from the distribution name
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# folders that are not part of the tool; Markdown code blocks are sketches
+extend-exclude = ["harness", "private", "*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+allowed-confusables = ["×"]   # × is the multiplication sign, not an x
+
+[tool.ruff.lint.isort]
+known-first-party = ["auditkit", "packs"]   # packs.<name>: how a pack imports another pack's code
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "domains"]                 # a pack's tests live inside the pack
+addopts = "--import-mode=importlib -ra"          # same test file names in two packs don't collide
