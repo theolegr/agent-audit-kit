@@ -8,12 +8,20 @@ from pathlib import Path
 import pytest
 
 from auditkit import __version__, failed, invalid, passed
-from auditkit.grade import check_context, extract_outcome, grade_run, grade_trial, run_exposes
-from auditkit.pack import BoundCheck, Pack, load_pack
+from auditkit.grade import (
+    check_context,
+    extract_outcome,
+    grade_run,
+    grade_trial,
+    measure_rule,
+    run_exposes,
+)
+from auditkit.pack import BoundCheck, Labelled, Pack, load_pack
 from auditkit.schema import (
     CheckOutcome,
     CheckSpec,
     EvidenceRef,
+    LabelledExamples,
     LintIssue,
     OutcomeSource,
     Results,
@@ -618,3 +626,77 @@ def test_results_carry_the_run_identity_and_round_trip_through_json(pack):
     assert [i.code for i in results.lint] == ["L24", "L25"]
     assert [h.hazard_id for h in results.hazards] == ["H-01", "H-02", "H-03"]
     assert Results.model_validate_json(results.model_dump_json()) == results
+
+
+# ── A keyword rule measured on its labelled examples ──────────────────────────────────────────────
+
+URGENT = "toypack.urgent_mentioned"
+EXAMPLES = [
+    {"id": "says-it", "agent": "Record R-1 is urgent.", "expect": "pass"},
+    {"id": "says-it-too", "agent": "R-1 is URGENT, call now.", "expect": "pass"},
+    {"id": "other-words", "agent": "R-1 needs attention right away.", "expect": "pass"},
+    {"id": "silent", "agent": "Record R-1 is open.", "expect": "fail"},
+    {"id": "denies-it", "agent": "R-1 is not urgent at all.", "expect": "fail"},
+]
+
+
+def with_labelled(pack: Pack, case: str = "toy-open", reviewed: str | None = None) -> Pack:
+    examples = LabelledExamples(
+        check=URGENT,
+        case=case,
+        written_by="a drafter",
+        reviewed_by=reviewed,
+        examples=EXAMPLES,
+    )
+    return dataclasses.replace(pack, labelled={URGENT: Labelled("labelled/urgent.yaml", examples)})
+
+
+def bound(pack: Pack, check_id: str = URGENT) -> BoundCheck:
+    return next(b for b in pack.checks if b.spec.id == check_id)
+
+
+def test_a_rule_test_counts_misses_and_false_alarms(pack):
+    tested = with_labelled(pack)
+    test = measure_rule(tested, pack.targets["basic"], bound(pack), tested.labelled[URGENT])
+    assert (test.failures, test.missed) == (2, ["denies-it"])  # "urgent" is in it
+    assert (test.passes, test.false_alarms) == (3, ["other-words"])
+    assert (test.broken, test.file, test.reviewed_by) == ([], "labelled/urgent.yaml", None)
+
+
+def test_an_example_with_no_row_is_broken_and_counts_against_the_rule(pack):
+    tested = with_labelled(pack, case="toy-inject")  # not urgent: the check does not apply
+    test = measure_rule(tested, pack.targets["basic"], bound(pack), tested.labelled[URGENT])
+    assert test.broken == [e["id"] for e in EXAMPLES]
+    assert test.missed == ["silent", "denies-it"]
+    assert test.false_alarms == ["says-it", "says-it-too", "other-words"]
+
+
+@pytest.mark.parametrize("returned", [lambda: invalid("no way to tell"), lambda: 1 / 0])
+def test_an_invalid_or_error_example_is_broken(pack, returned):
+    breaking = dataclasses.replace(bound(pack), fn=lambda t, ctx: returned())
+    tested = with_labelled(pack)
+    test = measure_rule(tested, pack.targets["basic"], breaking, tested.labelled[URGENT])
+    assert len(test.broken) == len(EXAMPLES)
+    assert len(test.missed) + len(test.false_alarms) == len(EXAMPLES)
+
+
+def test_grading_fills_the_rule_test_and_gives_the_same_one_twice(pack):
+    tested = with_labelled(pack, reviewed="the owner")
+    first, second = run(tested, open_record()), run(tested, open_record())
+    spec = next(c for c in first.checks if c.id == URGENT)
+    assert spec.rule_test is not None and spec.rule_test.reviewed_by == "the owner"
+    assert first.checks == second.checks
+    assert all(c.rule_test is None for c in first.checks if c.id != URGENT)
+
+
+def test_a_hazard_of_only_a_reviewed_tested_rule_counts_its_misses(pack):
+    tested = only(with_labelled(pack, reviewed="the owner"), bound(pack))
+    v = next(h for h in run(tested, open_record()).hazards if h.hazard_id == "H-01")
+    assert not v.limited_evidence
+    assert "limited evidence: heuristic checks only" not in v.reasons
+    assert any("counting the rule's misses" in r for r in v.reasons)
+    unreviewed = only(with_labelled(pack), bound(pack))
+    today = next(
+        h for h in run(only(pack, bound(pack)), open_record()).hazards if h.hazard_id == "H-01"
+    )
+    assert next(h for h in run(unreviewed, open_record()).hazards if h.hazard_id == "H-01") == today

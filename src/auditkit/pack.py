@@ -15,7 +15,7 @@ import os
 import re
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -25,7 +25,15 @@ from pydantic import BaseModel, ValidationError
 
 from auditkit import generic_checks
 from auditkit.checks import Applies, CheckDef, CheckFn, collect
-from auditkit.schema import Case, CheckSpec, Hazard, HazardFile, PackConfig, Target
+from auditkit.schema import (
+    Case,
+    CheckSpec,
+    Hazard,
+    HazardFile,
+    LabelledExamples,
+    PackConfig,
+    Target,
+)
 from auditkit.tools import ToolDef
 
 PACK_NAME = re.compile(r"^[a-z][a-z0-9_]*$")  # schema.PackName: importable as packs.<name>
@@ -55,6 +63,12 @@ class BoundCheck:
 
 
 @dataclass(frozen=True)
+class Labelled:
+    file: str  # its path in the pack folder: labelled/<name>.yaml
+    examples: LabelledExamples
+
+
+@dataclass(frozen=True)
 class Pack:
     dir: Path
     config: PackConfig
@@ -69,6 +83,8 @@ class Pack:
     ground_truth: dict[str, BaseModel]  # per case id
     expected: dict[str, BaseModel]  # per case id
     sha256: str
+    # check id → its labelled examples (labelled/<name>.yaml), for keyword rules
+    labelled: dict[str, Labelled] = field(default_factory=dict)
 
 
 # ── Files ─────────────────────────────────────────────────────────────────────────────────────────
@@ -510,6 +526,10 @@ def load_pack(
     # 6. checks and tools
     pack_defs, tool_defs = collect(module)
     core_defs = collect(generic_checks)[0] if core_checks is None else list(core_checks)
+    checks = bind_checks(config, pack_defs, core_defs)
+
+    # 7. labelled examples of keyword rules
+    labelled = read_labelled(folder, allowed, checks, cases)
     return Pack(
         dir=folder,
         config=config,
@@ -519,9 +539,44 @@ def load_pack(
         targets=targets,
         data=data,
         module=module,
-        checks=bind_checks(config, pack_defs, core_defs),
+        checks=checks,
         tools=index_tools(tool_defs),
         ground_truth=ground_truth,
         expected=expected,
         sha256=sha256,
+        labelled=labelled,
     )
+
+
+def read_labelled(
+    folder: Path, allowed: set[Path], checks: Sequence[BoundCheck], cases: Mapping[str, Case]
+) -> dict[str, Labelled]:
+    """The pack's `labelled/*.yaml` files, by the check each one tests. A file must name a bound
+    heuristic check no other file names, and a case of the loaded variant; two of its examples
+    may not read alike once folded (`generic_checks.fold_canary`): a near-copy tests nothing
+    new."""
+    methods = {b.spec.id: b.spec.method for b in checks}
+    out: dict[str, Labelled] = {}
+    for path in sorted((folder / "labelled").glob("*.yaml")):
+        file = read_model(pack_file(path, allowed), LabelledExamples)
+        if file.check not in methods:
+            raise PackError(f"{path}: check {file.check} is not a check of the pack")
+        if methods[file.check] != "heuristic":
+            raise PackError(
+                f"{path}: check {file.check} is {methods[file.check]}: only a heuristic check "
+                "is tested on labelled examples"
+            )
+        if file.check in out:
+            raise PackError(f"{path}: a second labelled file for check {file.check}")
+        if file.case not in cases:
+            raise PackError(f"{path}: case {file.case} is not a case of the loaded variant")
+        seen: dict[str, str] = {}
+        for example in file.examples:
+            folded = generic_checks.fold_canary(example.agent)
+            if folded in seen:
+                raise PackError(
+                    f"{path}: examples {seen[folded]} and {example.id} read alike once folded"
+                )
+            seen[folded] = example.id
+        out[file.check] = Labelled(path.relative_to(folder).as_posix(), file)
+    return out

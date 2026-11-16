@@ -22,6 +22,7 @@ from auditkit.pack import Pack
 from auditkit.runfolder import acceptance_sha256, criteria_sha256, older_acceptance_fields
 from auditkit.schema import (
     Acceptance,
+    CheckSpec,
     EvidenceRef,
     Execution,
     Hazard,
@@ -31,7 +32,7 @@ from auditkit.schema import (
     Trial,
     TrialGrade,
 )
-from auditkit.stats import cases_needed, percent
+from auditkit.stats import cases_needed, cp_upper, percent, rule_miss_bound
 
 # Markdown syntax that acts in the middle of a line (`>` and `#` only start one: never escaped).
 # `_` between two letters or digits cannot open emphasis, so `snake_case` stays as written.
@@ -131,6 +132,12 @@ def _ids(ids: Iterable[str]) -> str:
     return ", ".join(f"`{i}`" for i in ids)
 
 
+def _method(spec: CheckSpec) -> str:
+    """A check's method; a keyword rule tested on reviewed labelled examples says so."""
+    tested = spec.rule_test is not None and spec.rule_test.reviewed_by is not None
+    return f"{spec.method}, tested" if tested else spec.method
+
+
 def _said(note: str) -> str:
     """A check's note, which may quote the agent: always last on its line, after the report's own
     words, so it cannot pass for them."""
@@ -224,6 +231,10 @@ class _Report:
         self.rank = {s.name: s.rank for s in pack.config.severity_scale}
         self.exposes = run_exposes(self.target, list(trials.values()))
         self.served = {role: ids for role, ids in execution.served_models.items() if ids}
+        # the run's cases that vary a written one: case id -> the case it varies
+        run_cases = {c: pack.cases[c] for c in set(manifest.case_ids) if c in pack.cases}
+        self.run_cases = run_cases
+        self.derived = {c: case.derived_from for c, case in run_cases.items() if case.derived_from}
 
     # ── Page 1 ────────────────────────────────────────────────────────────────────────────────────
 
@@ -584,6 +595,67 @@ class _Report:
             lines.append(f"> {label}: {said}")
         return lines
 
+    def _level(self, spec: CheckSpec) -> float:
+        """The confidence of each of the two bounds a tested rule's hazard combines: half the risk
+        of the hazard's own (the lowest of the hazards it links)."""
+        linked = [self.hazards[h].acceptance.confidence for h in spec.hazards if h in self.hazards]
+        return 1 - (1 - min(linked, default=0.95)) / 2
+
+    def _rule_test_line(self, spec: CheckSpec) -> str:
+        t = spec.rule_test
+        assert t is not None
+        level = self._level(spec)
+        miss = cp_upper(len(t.missed), t.failures, level)
+        reviewed = (
+            f"reviewed by {inline(t.reviewed_by)}"
+            if t.reviewed_by is not None
+            else "not reviewed yet, so the figures count for nothing"
+        )
+        return (
+            f"{_ids([spec.id])} was tested on {t.failures + t.passes} labelled examples "
+            f"({inline(t.file)}, written by {inline(t.written_by)}, {reviewed}): it missed "
+            f"{len(t.missed)} of {t.failures} failures (up to {miss:.1%} at {percent(level)}) and "
+            f"raised {len(t.false_alarms)} false alarms on {t.passes} correct ones. The examples "
+            "are written ones, not the agent's own messages."
+        )
+
+    def _rule_bound(self, v: HazardVerdict, linked: Sequence[CheckSpec]) -> list[str]:
+        """When the hazard's bound counts its keyword rules' misses: the arithmetic, then each
+        example a rule got wrong, quoted with its id."""
+        acc = self.hazards[v.hazard_id].acceptance
+        evaluable = [c for c in linked if c.id not in v.unevaluable_checks]
+        level = 1 - (1 - acc.confidence) / 2
+        if v.limited_evidence or any(c.validated_oracle for c in evaluable):
+            return []
+        miss = rule_miss_bound(evaluable, level)
+        if miss is None or not v.cases_counted:
+            return []
+        plain = cp_upper(v.cases_failed, v.cases_counted, level)
+        lines = [
+            f"Upper bound {_rate(v.upper_bound)}, counting the keyword rules' misses: {plain:.1%} "
+            f"at {percent(level)} over {v.cases_counted} cases, divided by 1 {chr(0x2212)} "
+            f"{miss:.1%}, the largest miss bound at {percent(level)}.",
+            "",
+        ]
+        for c in evaluable:
+            t = c.rule_test
+            if t is None:
+                continue
+            held = self.pack.labelled.get(c.id)
+            texts = {e.id: e.agent for e in held.examples.examples} if held is not None else {}
+            for what, ids in (
+                ("Missed", [i for i in t.missed if i not in t.broken]),
+                ("False alarm", [i for i in t.false_alarms if i not in t.broken]),
+                ("Broken (counted against the rule)", t.broken),
+            ):
+                for example_id in ids:
+                    text = texts.get(example_id)
+                    quoted = f': "{inline(text, EXCERPT_LIMIT)}"' if text else ""
+                    lines.append(f"> **{what}** by `{c.id}`, `{example_id}`{quoted}")
+            if t.missed or t.false_alarms or t.broken:
+                lines.append("")
+        return lines
+
     def _cannot_show(self) -> list[str]:
         out = []
         assessed = [hid for hid, h in self.hazards.items() if not h.deferred_reason]
@@ -603,8 +675,14 @@ class _Report:
                 f"This run counted {span} distinct case(s) per hazard; {hid}, at ≤ {rate}, needs "
                 f"{need} failure-free cases to be met."
             )
+            if self.derived:
+                out.append(self._variations(assessed))
         heuristic = sorted(
-            c.id for c in self.results.checks if c.method == "heuristic" and c.kind != "validity"
+            c.id
+            for c in self.results.checks
+            if c.method == "heuristic"
+            and c.kind != "validity"
+            and (c.rule_test is None or c.rule_test.reviewed_by is None)
         )
         if heuristic:
             verb = "is" if len(heuristic) == 1 else "are"
@@ -612,6 +690,7 @@ class _Report:
                 f'{_ids(heuristic)} {verb} heuristic, with unknown recall: "not detected" is not '
                 '"absent".'
             )
+        out += [self._rule_test_line(c) for c in self.results.checks if c.rule_test is not None]
         if self.manifest.repeats == 1:
             out.append("One trial per case: instability across repeats is not measured.")
         if self.pack.config.side_channel:
@@ -633,6 +712,23 @@ class _Report:
         else:
             out.append("Results hold for this target as run only: no served model id was recorded.")
         return out
+
+    def _varied(self, hazard_id: str) -> tuple[int, int]:
+        """(variations, cases) of the run that tag the hazard."""
+        tagged = [c for c, case in self.run_cases.items() if hazard_id in case.hazards]
+        return sum(c in self.derived for c in tagged), len(tagged)
+
+    def _variations(self, assessed: Sequence[str]) -> str:
+        d, n, k = len(self.derived), len(self.run_cases), len(set(self.derived.values()))
+        verb, draws = ("is a variation", "it is not an independent draw")
+        if d > 1:
+            verb, draws = ("are variations", "they are not independent draws")
+        written = "written case" if k == 1 else "written cases"
+        per = [(hid, self._varied(hid)) for hid in assessed]
+        spread = ", ".join(f"{hid} {v} of {t}" for hid, (v, t) in per if v)
+        return (
+            f"{d} of the run's {n} cases {verb} of {k} {written}, so {draws}; per hazard: {spread}."
+        )
 
     # ── Body ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -682,12 +778,15 @@ class _Report:
             ]
             if h.deferred_reason:
                 lines += [f"Deferred: {inline(h.deferred_reason)}", ""]
+            varied, tagged = self._varied(hid)
+            of_them = f"; variations of written cases: {varied} of {tagged}" if varied else ""
             lines += [
                 f"Cases: {v.cases_counted} counted of {v.cases_tagged} tagged, {v.cases_excluded} "
                 f"excluded, {v.cases_failed} failed; observed rate {_rate(v.observed_rate)}, upper "
-                f"bound {_rate(v.upper_bound)}; unstable cases: {v.unstable_cases}.",
+                f"bound {_rate(v.upper_bound)}; unstable cases: {v.unstable_cases}{of_them}.",
                 "",
             ]
+            lines += self._rule_bound(v, linked)
             controls = [
                 [
                     control.id,
@@ -705,7 +804,7 @@ class _Report:
                 [
                     f"`{c.id}`",
                     c.kind,
-                    c.method,
+                    _method(c),
                     "no: the target does not expose "
                     + ", ".join(ch for ch in c.needs if ch not in self.exposes)
                     if c.id in v.unevaluable_checks
@@ -731,7 +830,31 @@ class _Report:
                 lines += _table(["Case", "Status", "Trials", "Reason"], cases)
             else:
                 lines += ["No case of this run is tagged with this hazard.", ""]
+            lines += self._invalid_rows(hid, {c.id for c in linked})
         return lines
+
+    def _invalid_rows(self, hazard_id: str, check_ids: set[str]) -> list[str]:
+        """Each row of the hazard's checks that is invalid in a trial that counts, in a case tagged
+        with it, with its fault and note: the "invalid" of the case table above, which page one's
+        top findings may leave out. The trial is unscored for the hazard unless another check of
+        the hazard failed in it (`stats.trial_status_for_hazard`)."""
+        tagged = {row.case_id for row in self.results.case_hazards if row.hazard_id == hazard_id}
+        rows = [
+            f"- `{g.case_id}`, run {g.n}: `{r.check_id}` invalid (fault: {r.fault}).{_said(r.note)}"
+            for g in self.results.trials
+            if g.status == "valid" and g.case_id in tagged
+            for r in g.results
+            if r.check_id in check_ids and r.outcome == "invalid"
+        ]
+        if not rows:
+            return []
+        return [
+            f"Invalid in a trial that counts, so the trial is unscored for {hazard_id} unless "
+            f"another check of {hazard_id} failed in it:",
+            "",
+            *rows,
+            "",
+        ]
 
     def _implementation(self, control_id: str) -> str:
         implementation = self.target.control_implementations.get(control_id)
@@ -802,7 +925,7 @@ class _Report:
             [
                 f"`{c.id}`",
                 c.kind,
-                c.method,
+                _method(c),
                 ", ".join(c.hazards) or "—",
                 ", ".join(c.controls) or "—",
                 *(str(counts[(c.id, o)]) for o in outcomes),

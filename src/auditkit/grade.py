@@ -11,29 +11,32 @@ import dataclasses
 import json
 import re
 from collections.abc import Callable, Collection, Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ValidationError
 
 from auditkit import __version__, stats
 from auditkit.checks import CheckContext, NoOutcome, StimulusNotDelivered
-from auditkit.pack import BoundCheck, Pack
+from auditkit.pack import BoundCheck, Labelled, Pack
 from auditkit.schema import (
     CaseHazardStatus,
     CaseStats,
     CheckOutcome,
     CheckResult,
+    CheckSpec,
     EvidenceRef,
     Hazard,
     HazardVerdict,
     LintIssue,
     OutcomeSource,
     Results,
+    RuleTest,
     Target,
     Transcript,
     Trial,
     TrialGrade,
+    Turn,
 )
 from auditkit.tools import now
 
@@ -288,13 +291,15 @@ def _failures(grades: Sequence[TrialGrade], check_ids: Collection[str]) -> list[
 
 def _hazard(
     pack: Pack,
+    specs: Sequence[CheckSpec],
     hazard: Hazard,
     by_case: dict[str, list[TrialGrade]],
     exposes: Collection[str],
 ) -> tuple[list[CaseHazardStatus], HazardVerdict]:
-    """The per-case statuses and the verdict for one hazard. The sample is the run's cases tagged
-    with it; a failure elsewhere, or inside a trial that does not count, is shown, never counted."""
-    linked = [bound.spec for bound in pack.checks if hazard.id in bound.spec.hazards]
+    """The per-case statuses and the verdict for one hazard (`specs`: the pack's check specs, its
+    keyword rules measured). The sample is the run's cases tagged with it; a failure elsewhere, or
+    inside a trial that does not count, is shown, never counted."""
+    linked = [spec for spec in specs if hazard.id in spec.hazards]
     ids = {spec.id for spec in linked}
     tagged = [case_id for case_id in by_case if hazard.id in pack.cases[case_id].hazards]
     rows = []
@@ -328,6 +333,70 @@ def _hazard(
             ),
         }
     )
+
+
+LABELLED_AT = datetime(2000, 1, 1, tzinfo=UTC)  # fixed: a labelled example has no real time
+
+
+def measure_rule(pack: Pack, target: Target, bound: BoundCheck, labelled: Labelled) -> RuleTest:
+    """`bound` graded on each of its labelled examples, as the grader grades a trial: a 2-turn
+    trial of the file's case (the user line, its side-channel keys all null, then the example as
+    the agent's first answer). A fail-labelled example the check does not fail is a miss; a
+    pass-labelled one it does not pass is a false alarm. No row, invalid, error or not evaluable
+    is broken, and counts against the rule the same way."""
+    spec = labelled.examples
+    missed, false_alarms, broken = [], [], []
+    for example in spec.examples:
+        user = Turn(
+            index=0,
+            role="user",
+            text=spec.user,
+            at=LABELLED_AT,
+            source="simulator",
+            hidden=dict.fromkeys(pack.config.side_channel),
+        )
+        agent = Turn(index=1, role="agent", text=example.agent, at=LABELLED_AT)
+        trial = Trial(
+            run_id="labelled",
+            case_id=spec.case,
+            n=1,
+            target_name=target.name,
+            exposes=run_exposes(target, ()),
+            status="completed",
+            stop_reason="outcome_emitted",
+            started_at=LABELLED_AT,
+            finished_at=LABELLED_AT,
+            transcript=Transcript(turns=[user, agent]),
+        )
+        ctx = check_context(pack, target, trial, max_turns=pack.config.max_turns)
+        result = run_check(bound, ctx)
+        outcome = result.outcome if result is not None else None
+        if outcome not in ("pass", "fail"):
+            broken.append(example.id)
+        if outcome != example.expect:
+            (missed if example.expect == "fail" else false_alarms).append(example.id)
+    return RuleTest(
+        file=labelled.file,
+        failures=sum(e.expect == "fail" for e in spec.examples),
+        missed=missed,
+        passes=sum(e.expect == "pass" for e in spec.examples),
+        false_alarms=false_alarms,
+        broken=broken,
+        written_by=spec.written_by,
+        reviewed_by=spec.reviewed_by,
+    )
+
+
+def tested_specs(pack: Pack, target: Target) -> list[CheckSpec]:
+    """The pack's check specs, each keyword rule with labelled examples measured on them."""
+    return [
+        b.spec.model_copy(
+            update={"rule_test": measure_rule(pack, target, b, pack.labelled[b.spec.id])}
+        )
+        if b.spec.id in pack.labelled
+        else b.spec
+        for b in pack.checks
+    ]
 
 
 def run_exposes(target: Target, trials: Sequence[Trial]) -> list[str]:
@@ -383,10 +452,11 @@ def grade_run(
     by_case = {case_id: [g for g in grades if g.case_id == case_id] for case_id in sorted(case_ids)}
     exposes = run_exposes(target, [trial for trial, _ in trials])
     validity = {bound.spec.id for bound in pack.checks if bound.spec.kind == "validity"}
+    specs = tested_specs(pack, target)
     case_hazards: list[CaseHazardStatus] = []
     verdicts: list[HazardVerdict] = []
     for hazard_id in sorted(pack.hazards):
-        rows, verdict = _hazard(pack, pack.hazards[hazard_id], by_case, exposes)
+        rows, verdict = _hazard(pack, specs, pack.hazards[hazard_id], by_case, exposes)
         case_hazards += rows
         verdicts.append(verdict)
     return Results(
@@ -397,7 +467,7 @@ def grade_run(
         harness_version=__version__,
         harness_git_sha=harness_git_sha,
         expectations_match=expectations_match,
-        checks=[bound.spec for bound in pack.checks],
+        checks=specs,
         trials=grades,
         cases=[_case_stats(case_id, by_case[case_id], repeats, validity) for case_id in by_case],
         case_hazards=sorted(case_hazards, key=lambda row: (row.case_id, row.hazard_id)),

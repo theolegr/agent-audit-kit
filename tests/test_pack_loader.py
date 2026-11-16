@@ -12,7 +12,7 @@ import yaml
 
 from auditkit import check, passed
 from auditkit.checks import CHECK_ATTR
-from auditkit.pack import PackError, load_pack, pack_sha256, read_yaml
+from auditkit.pack import PackError, load_pack, pack_files, pack_sha256, read_yaml
 
 FIXTURE_PACKS = Path(__file__).parent / "fixtures" / "packs"
 
@@ -671,3 +671,76 @@ def test_yaml_python_tag_is_refused_and_not_executed(packs, tmp_path):
     with pytest.raises(PackError, match="invalid YAML"):
         load_pack(packs, "toypack")
     assert not proof.exists()
+
+
+# ── Labelled examples of a keyword rule ───────────────────────────────────────────────────────────
+
+LABELLED = {
+    "check": "toypack.urgent_mentioned",
+    "case": "toy-open",
+    "written_by": "a drafter",
+    "examples": [
+        {"id": "says-it", "agent": "Record R-1 is urgent.", "expect": "pass"},
+        {"id": "silent", "agent": "Record R-1 is open.", "expect": "fail", "kind": "no mention"},
+    ],
+}
+
+
+def write_labelled(packs: Path, name: str = "urgent", **changes) -> Path:
+    folder = packs / "toypack" / "labelled"
+    folder.mkdir(exist_ok=True)
+    path = folder / f"{name}.yaml"
+    path.write_text(yaml.safe_dump(LABELLED | changes, sort_keys=False, allow_unicode=True))
+    return path
+
+
+def test_a_labelled_file_is_loaded_by_the_check_it_tests(packs):
+    write_labelled(packs)
+    labelled = load_pack(packs, "toypack").labelled
+    assert list(labelled) == ["toypack.urgent_mentioned"]
+    assert labelled["toypack.urgent_mentioned"].file == "labelled/urgent.yaml"
+    assert labelled["toypack.urgent_mentioned"].examples.reviewed_by is None
+
+
+def test_a_labelled_file_is_hashed_and_snapshotted(packs):
+    path = write_labelled(packs)
+    assert path in pack_files(packs / "toypack")  # the snapshot copies these files
+    before = pack_sha256(packs, "toypack")
+    edited = {**LABELLED["examples"][0], "agent": "Record R-1 is urgent!"}
+    write_labelled(packs, examples=[edited, LABELLED["examples"][1]])
+    assert pack_sha256(packs, "toypack") != before
+
+
+# a full-width copy of an example: each ASCII letter as its full-width form
+WIDE = "".join(chr(ord(c) + 0xFEE0) if c.isalpha() else c for c in "Record R-1 is open.")
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"check": "toypack.nothing_here"}, "is not a check of the pack"),
+        ({"check": "toypack.status_matches"}, "only a heuristic check"),
+        ({"case": "toy-missing"}, "is not a case of the loaded variant"),
+        (
+            {"examples": [LABELLED["examples"][0], {**LABELLED["examples"][1], "id": "says-it"}]},
+            "duplicate example ids",
+        ),
+        ({"examples": LABELLED["examples"][:1]}, "one example labelled pass and one labelled fail"),
+        (  # a full-width copy of an example
+            {"examples": [*LABELLED["examples"], {"id": "wide", "agent": WIDE, "expect": "fail"}]},
+            "examples silent and wide read alike",
+        ),
+    ],
+)
+def test_a_bad_labelled_file_is_refused_with_its_name(packs, changes, message):
+    write_labelled(packs, **changes)
+    with pytest.raises(PackError, match=message) as e:
+        load_pack(packs, "toypack")
+    assert "urgent.yaml" in str(e.value)
+
+
+def test_a_second_labelled_file_for_one_check_is_refused(packs):
+    write_labelled(packs)
+    write_labelled(packs, name="urgent-again")
+    with pytest.raises(PackError, match="a second labelled file for check"):
+        load_pack(packs, "toypack")

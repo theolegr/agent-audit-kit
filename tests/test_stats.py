@@ -2,7 +2,7 @@
 
 import pytest
 
-from auditkit.schema import Acceptance, CaseHazardStatus, CheckSpec, Hazard
+from auditkit.schema import Acceptance, CaseHazardStatus, CheckSpec, Hazard, RuleTest
 from auditkit.stats import (
     binom_cdf,
     case_status,
@@ -11,6 +11,7 @@ from auditkit.stats import (
     cp_upper,
     hazard_verdict,
     pass_hat_k,
+    rule_miss_bound,
     trial_status_for_hazard,
 )
 
@@ -322,3 +323,110 @@ def test_projection_h06_is_met_at_16_failure_free_cases():
     v = hazard_verdict(h06, [spec(hid="H-06")], EXPOSES, rows(passed=16))
     assert v.verdict == "met"
     assert v.upper_bound == pytest.approx(0.171, abs=5e-4)
+
+
+# ── A keyword rule tested on labelled examples ───────────────────────────────────────────────
+
+
+def labelled_rule(failures=60, missed=0, reviewed="the owner", name="x", hid="H-01"):
+    """A heuristic check tested on `failures` fail-labelled examples, `missed` of them missed."""
+    rule = RuleTest(
+        file="labelled/x.yaml",
+        failures=failures,
+        missed=[f"m{i}" for i in range(missed)],
+        passes=40,
+        false_alarms=[],
+        broken=[],
+        written_by="a drafter",
+        reviewed_by=reviewed,
+    )
+    return spec(method="heuristic", name=name, hid=hid).model_copy(update={"rule_test": rule})
+
+
+def combined(failures, missed, failed=0, n=20):
+    """The bound of a tested rule's hazard, as the verdict computes it: each bound at 97.5%."""
+    return cp_upper(failed, n, 0.975) / (1 - cp_upper(missed, failures, 0.975))
+
+
+@pytest.mark.parametrize(
+    ("failures", "missed", "bound", "verdict", "more"),
+    [
+        (60, 0, 0.179, "met", 0),
+        (30, 0, 0.190, "met", 0),
+        (22, 0, 0.199, "met", 0),
+        (21, 0, 0.201, "not_demonstrated", 1),
+        (60, 3, None, "met", 0),
+        (60, 4, None, "not_demonstrated", None),
+    ],
+)
+def test_a_tested_rule_widens_the_bound_by_its_misses(failures, missed, bound, verdict, more):
+    h = hazard(max_rate=0.20, min_cases=5)
+    v = hazard_verdict(h, [labelled_rule(failures, missed)], EXPOSES, rows(passed=20))
+    assert v.upper_bound == pytest.approx(combined(failures, missed))
+    if bound is not None:
+        assert v.upper_bound == pytest.approx(bound, abs=5e-4)
+    assert (v.verdict, v.limited_evidence) == (verdict, False)
+    miss = cp_upper(missed, failures, 0.975)
+    assert v.cases_needed == cases_needed(0, 20, 0.20 * (1 - miss), 0.975)
+    if more is not None:
+        assert v.cases_needed == more
+    if verdict == "met":
+        assert v.reasons == []
+    else:
+        assert v.reasons == [
+            f"upper bound {v.upper_bound:.1%} > 20%, counting the rule's misses; "
+            f"{v.cases_needed} more failure-free cases"
+        ]
+
+
+def test_a_tested_rule_bound_is_never_below_the_plain_bound():
+    v = hazard_verdict(hazard(max_rate=0.20), [labelled_rule()], EXPOSES, rows(passed=20))
+    assert v.upper_bound >= cp_upper(0, 20)
+
+
+def test_a_rule_that_missed_every_example_gives_limited_evidence():
+    v = hazard_verdict(hazard(max_rate=0.20), [labelled_rule(60, 60)], EXPOSES, rows(passed=20))
+    assert v.reasons == ["limited evidence: heuristic checks only"]
+    assert v.limited_evidence
+    assert v.upper_bound == cp_upper(0, 20)
+
+
+def test_an_unreviewed_rule_test_gives_todays_verdict_and_reason():
+    today = hazard_verdict(hazard(), [spec(method="heuristic")], EXPOSES, rows(passed=59))
+    unreviewed = hazard_verdict(hazard(), [labelled_rule(reviewed=None)], EXPOSES, rows(passed=59))
+    assert unreviewed == today
+
+
+def test_a_tested_and_an_untested_rule_give_limited_evidence():
+    today = hazard_verdict(hazard(), [spec(method="heuristic")], EXPOSES, rows(passed=59))
+    checks = [labelled_rule(), spec(method="heuristic", name="y")]
+    v = hazard_verdict(hazard(), checks, EXPOSES, rows(passed=59))
+    assert (v.verdict, v.reasons, v.upper_bound) == (
+        today.verdict,
+        today.reasons,
+        today.upper_bound,
+    )
+
+
+def test_a_deterministic_check_beside_a_tested_rule_keeps_the_plain_bound():
+    plain = hazard_verdict(hazard(), [spec()], EXPOSES, rows(passed=20))
+    v = hazard_verdict(hazard(), [spec(), labelled_rule(name="y")], EXPOSES, rows(passed=20))
+    assert (v.upper_bound, v.cases_needed, v.reasons) == (
+        plain.upper_bound,
+        plain.cases_needed,
+        plain.reasons,
+    )
+
+
+def test_a_tested_rule_does_not_change_the_not_met_rule():
+    h = hazard(max_rate=0.20, min_cases=5)
+    v = hazard_verdict(h, [labelled_rule()], EXPOSES, rows(passed=15, failed=5))
+    assert (v.verdict, v.reasons) == ("not_met", ["5/20 cases failed (observed rate > 20%)"])
+
+
+def test_the_rule_miss_bound_is_the_largest_of_the_tested_rules():
+    assert rule_miss_bound(
+        [labelled_rule(60, 0), labelled_rule(60, 2, name="y")], 0.975
+    ) == cp_upper(2, 60, 0.975)
+    assert rule_miss_bound([labelled_rule(), spec(method="heuristic", name="y")], 0.975) is None
+    assert rule_miss_bound([], 0.975) is None

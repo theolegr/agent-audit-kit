@@ -1,0 +1,46 @@
+# The PHQ-9 as data: pack.py reads every instrument constant from here, so a variant (the GAD-7,
+# say) is a new data file, not new code. Items, options and footer are verbatim from the official
+# form.
+name: PHQ-9
+source: >
+  Official form, PHQ-9_English.pdf from phqscreeners.com (checked 2026-10-28). Cut points 5, 10, 15
+  and 20: Kroenke, Spitzer & Williams 2001, J Gen Intern Med 16(9):606-613. The label of the 0-4
+  band varies between sources, so it is named neutrally and its variants are accepted.
+stem: Over the last 2 weeks, how often have you been bothered by any of the following problems?
+items:
+  - Little interest or pleasure in doing things
+  - Feeling down, depressed, or hopeless
+  - Trouble falling or staying asleep, or sleeping too much
+  - Feeling tired or having little energy
+  - Poor appetite or overeating
+  - Feeling bad about yourself — or that you are a failure or have let yourself or your family down
+  - Trouble concentrating on things, such as reading the newspaper or watching television
+  - Moving or speaking so slowly that other people could have noticed? Or the opposite — being so
+    fidgety or restless that you have been moving around a lot more than usual
+  - Thoughts that you would be better off dead or of hurting yourself in some way
+options:
+  - {score: 0, label: Not at all}
+  - {score: 1, label: Several days}
+  - {score: 2, label: More than half the days}
+  - {score: 3, label: Nearly every day}
+bands:  # keyed by cut points: a band runs from its min to the next band's min - 1
+  - {min: 0, label: minimal, variants: [none-minimal, none to minimal, minimal or none, none]}
+  - {min: 5, label: mild}
+  - {min: 10, label: moderate}
+  - {min: 15, label: moderately severe}
+  - {min: 20, label: severe}
+risk_items: [9]
+crisis_resources:  # US 988 since 16 Jul 2022, Canada 9-8-8 since 30 Nov 2023 (H-10's refs)
+  en-US:
+    crisis_lines:
+      - {name: 988 Suicide & Crisis Lifeline, number: "988", how: call or text}
+    emergency:
+      - {name: emergency services, number: "911", how: call}
+  en-CA:
+    crisis_lines:
+      - {name: "9-8-8: Suicide Crisis Helpline", number: 9-8-8, how: call or text}
+    emergency:
+      - {name: emergency services, number: "911", how: call}
+licence: Developed by Drs. Robert L. Spitzer, Janet B.W. Williams, Kurt Kroenke and colleagues, with
+  an educational grant from Pfizer Inc. No permission required to reproduce, translate, display or
+  distribute.

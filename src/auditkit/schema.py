@@ -215,6 +215,8 @@ class Case(Strict):  # cases/<id>.yaml: one synthetic user, its persona and its 
     forbidden_strings: list[str] = []  # never in agent output (e.g. another tenant's canaries)
     environment: dict[str, Any] = {}  # initial state of the mocked tools, deep-copied per trial
     max_turns: int | None = Field(default=None, ge=1)
+    # the written case this one varies (lint L10, L17): a variation is not an independent draw
+    derived_from: Id | None = None
 
     @model_validator(mode="after")
     def _unique_stimuli(self) -> Case:
@@ -256,6 +258,32 @@ class Target(Strict):  # targets/<name>.yaml — the system under test
     tools: list[str] = []  # pack @tool names offered to the agent
     max_tool_rounds: int = Field(default=5, ge=1)
     connection: dict[str, Any] = {}  # reserved: http / openai_compatible
+
+
+class LabelledExample(Strict):  # one first message a keyword rule should pass or fail
+    id: Id
+    agent: str = Field(min_length=1)
+    expect: Literal["pass", "fail"]
+    kind: str = ""  # the kind of message, for counts per kind
+    note: str = ""
+
+
+class LabelledExamples(Strict):  # labelled/<name>.yaml: a keyword rule's test set
+    check: CheckId
+    case: Id  # the case whose context each example is graded in
+    user: str = "Hello."  # the user line each example answers
+    written_by: str  # a role, never a name: the file is exported
+    reviewed_by: str | None = None  # a role; until it is set, the examples count for nothing
+    examples: list[LabelledExample] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _unique_and_both_labels(self) -> LabelledExamples:
+        ids = [e.id for e in self.examples]
+        if len(ids) != len(set(ids)):
+            raise ValueError("duplicate example ids")
+        if {e.expect for e in self.examples} != {"pass", "fail"}:
+            raise ValueError("needs at least one example labelled pass and one labelled fail")
+        return self
 
 
 # ── Transcript: runs/<ts>/<case_id>/run_<n>.json — raw evidence, written once ─────────────────────
@@ -478,6 +506,17 @@ class Trial(Strict):
 # ── Grading: runs/<ts>/results.json — rebuilt by every grading; every list sorted ─────────────────
 
 
+class RuleTest(Strict):  # a keyword rule graded on its labelled examples, at every grading
+    file: str  # labelled/<name>.yaml
+    failures: int  # examples labelled fail
+    missed: list[Id]  # labelled fail, not failed (broken ones included)
+    passes: int  # examples labelled pass
+    false_alarms: list[Id]  # labelled pass, not passed (broken ones included)
+    broken: list[Id]  # no row, invalid, error or not evaluable: counted against the rule
+    written_by: str
+    reviewed_by: str | None
+
+
 class CheckSpec(Strict):  # built by the loader from @check and pack.yaml bindings
     id: CheckId
     kind: Kind
@@ -487,6 +526,7 @@ class CheckSpec(Strict):  # built by the loader from @check and pack.yaml bindin
     needs: Channels = ["turn_text"]
     description: str
     origin: Literal["core", "pack"]
+    rule_test: RuleTest | None = None  # filled by grading, from the pack's labelled examples
 
     @model_validator(mode="after")
     def _links_match_kind(self) -> CheckSpec:
@@ -494,6 +534,8 @@ class CheckSpec(Strict):  # built by the loader from @check and pack.yaml bindin
             raise ValueError("validity checks decide whether a trial counts; they link no hazard")
         if self.kind != "validity" and not self.hazards:
             raise ValueError("conformance and hazard checks link at least one hazard")
+        if self.rule_test is not None and self.method != "heuristic":
+            raise ValueError("only a heuristic check is tested on labelled examples")
         return self
 
     @property
@@ -579,10 +621,13 @@ class HazardVerdict(Strict):
     cases_excluded: int
     unstable_cases: int  # pass and fail across repeats
     observed_rate: float | None
+    # one-sided exact bound; with a tested keyword rule, the combined bound of `stats` instead
     upper_bound: float | None
     cases_needed: int | None  # more failure-free distinct cases to reach the threshold
     unevaluable_checks: list[CheckId]  # needs not exposed by the target
-    limited_evidence: bool  # no evaluable check has a validated oracle
+    # no evaluable check has a validated oracle, and the others are not all keyword rules tested
+    # on reviewed labelled examples
+    limited_evidence: bool
     failures: list[EvidenceRef] = []
     # fails on cases not tagged with this hazard: shown, not counted
     outside_sample: list[EvidenceRef] = []

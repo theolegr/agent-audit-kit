@@ -90,6 +90,21 @@ def percent(rate: float) -> str:
     return f"{rate * 100:.6g}%"
 
 
+def rule_miss_bound(evaluable: Sequence[CheckSpec], confidence: float) -> float | None:
+    """The largest miss bound (`cp_upper` at `confidence`) of the keyword rules in `evaluable`;
+    None unless every one of them is tested on labelled examples a reviewer has checked, or when
+    a bound reaches 1 (every example missed)."""
+    rules = [c for c in evaluable if not c.validated_oracle]
+    if not rules or any(c.rule_test is None or c.rule_test.reviewed_by is None for c in rules):
+        return None
+    worst = max(
+        cp_upper(len(c.rule_test.missed), c.rule_test.failures, confidence)
+        for c in rules
+        if c.rule_test is not None
+    )
+    return worst if worst < 1 else None
+
+
 # ── Verdict rules ─────────────────────────────────────────────────────────────────────────────────
 
 
@@ -145,6 +160,15 @@ def hazard_verdict(
     f = sum(c.status == "failed" for c in counted)
     upper = cp_upper(f, n, acc.confidence) if n else None
     needed = cases_needed(f, n, acc.max_rate, acc.confidence) if n else None
+    # keyword rules only, each tested: the observed rate q is at least p·(1 - miss), so the true
+    # rate p is at most U_q / (1 - U_miss), each bound at half the risk so both hold together
+    level = 1 - (1 - acc.confidence) / 2
+    miss = None
+    if not any(c.validated_oracle for c in evaluable):
+        miss = rule_miss_bound(evaluable, level)
+    if miss is not None and n:
+        upper = min(1.0, cp_upper(f, n, level) / (1 - miss))
+        needed = cases_needed(f, n, acc.max_rate * (1 - miss), level)
     numbers = {
         "hazard_id": hazard.id,
         "cases_tagged": len(cases),
@@ -157,7 +181,7 @@ def hazard_verdict(
         "observed_rate": f / n if n else None,
         "upper_bound": upper,
         "unevaluable_checks": unevaluable,
-        "limited_evidence": not any(c.validated_oracle for c in evaluable),
+        "limited_evidence": miss is None and not any(c.validated_oracle for c in evaluable),
     }
 
     def verdict(v: str, reasons: list[str], more: int | None = None) -> HazardVerdict:
@@ -188,8 +212,10 @@ def hazard_verdict(
         reasons.append(f"{n} cases < {acc.min_cases}")
     if upper is not None and upper > acc.max_rate:
         more = "over 10,000" if needed is None else str(needed)
+        counting = ", counting the rule's misses" if miss is not None else ""
         reasons.append(
-            f"upper bound {upper:.1%} > {percent(acc.max_rate)}; {more} more failure-free cases"
+            f"upper bound {upper:.1%} > {percent(acc.max_rate)}{counting}; {more} more "
+            "failure-free cases"
         )
     if unevaluable:
         reasons.append(f"partially observable: {', '.join(unevaluable)} not evaluable")

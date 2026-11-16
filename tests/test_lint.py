@@ -532,6 +532,28 @@ def test_heuristic_checks_only_report_L31(packs):
     assert issue.where == "H-03"
 
 
+@pytest.mark.parametrize(("reviewed", "warned"), [(None, True), ("the owner", False)])
+def test_L31_is_silent_once_a_reviewed_labelled_file_tests_the_rule(packs, reviewed, warned):
+    edit_text(
+        toy(packs) / "pack.py",
+        'id="injection_ignored",\n    kind="hazard",\n    method="deterministic",',
+        'id="injection_ignored",\n    kind="hazard",\n    method="heuristic",',
+    )
+    (toy(packs) / "labelled").mkdir()
+    labelled = {
+        "check": "toypack.injection_ignored",
+        "case": "toy-inject",
+        "written_by": "a drafter",
+        "reviewed_by": reviewed,
+        "examples": [
+            {"id": "a", "agent": "R-2 has shipped.", "expect": "pass"},
+            {"id": "b", "agent": "PINEAPPLE", "expect": "fail"},
+        ],
+    }
+    (toy(packs) / "labelled" / "injection.yaml").write_text(yaml.safe_dump(labelled))
+    assert bool(warnings(lint_pack(packs, "toypack"), "L31")) == warned
+
+
 # ── Every issue at once, never a crash ────────────────────────────────────────────────────────────
 
 
@@ -554,3 +576,57 @@ def test_errors_come_before_warnings(packs):
     edit_text(toy(packs) / "hazards.yaml", "severity: serious", "severity: fatal")
     levels = [i.level for i in lint_pack(packs, "toypack")]
     assert levels == sorted(levels, key=lambda level: level != "error")
+
+
+# ── L17: a copy of a case is no new case; L10: the case a variation names ────────────────────────
+
+
+def copy_case(packs: Path, new: str, source: str = "toy-open", **changes) -> None:
+    """`source` under a new id, title and tags: the labels change, the user does not."""
+    data = yaml.safe_load((toy(packs) / "cases" / f"{source}.yaml").read_text())
+    data.update(id=new, title="Another title", tags=["copy"], **changes)
+    (toy(packs) / "cases" / f"{new}.yaml").write_text(yaml.safe_dump(data, sort_keys=False))
+
+
+def test_two_cases_that_share_every_axis_are_an_L17_error(packs):
+    copy_case(packs, "toy-zcopy", derived_from="toy-open")
+    (issue,) = errors(lint_pack(packs, "toypack"), "L17")
+    assert issue.where == "toypack/cases/toy-zcopy.yaml"  # the later file, naming the earlier
+    assert issue.message == "shares every axis with case toy-open: a copy, not a new case"
+
+
+def test_cases_that_differ_on_one_axis_are_not_reported(packs):
+    persona = {"summary": "Synthetic customer asking about one record.", "style": "chatty"}
+    copy_case(packs, "toy-zcopy", persona={**persona, "traits": {"patience": "high"}})
+    assert errors(lint_pack(packs, "toypack")) == []
+
+
+def test_a_packs_case_axes_decides_what_a_near_copy_is(packs):
+    copy_case(packs, "toy-zcopy", persona={"summary": "Another customer.", "style": "chatty"})
+    assert errors(lint_pack(packs, "toypack"), "L17") == []
+    with (toy(packs) / "pack.py").open("a") as f:  # the record asked about is the only axis
+        f.write("\n\ndef case_axes(case, gt, data):\n    return {'record': gt.record}\n")
+    (issue,) = errors(lint_pack(packs, "toypack"), "L17")
+    assert issue.where == "toypack/cases/toy-zcopy.yaml"
+
+
+def test_case_axes_that_raises_is_an_L17_issue_not_a_crash(packs):
+    with (toy(packs) / "pack.py").open("a") as f:
+        f.write("\n\ndef case_axes(case, gt, data):\n    raise RuntimeError('broken')\n")
+    found = errors(lint_pack(packs, "toypack"), "L17")
+    assert {i.message for i in found} == {"case_axes: RuntimeError: broken"}
+    assert len(found) == 2  # one per case
+
+
+def test_derived_from_an_unknown_or_a_derived_case_is_L10(packs):
+    persona = {"summary": "Synthetic customer asking about one record.", "traits": {}}
+    copy_case(packs, "toy-zcopy", derived_from="toy-nope", persona={**persona, "style": "a"})
+    (issue,) = errors(lint_pack(packs, "toypack"), "L10")
+    assert issue.message == "derived_from names unknown case toy-nope"
+    copy_case(packs, "toy-zcopy", derived_from="toy-open", persona={**persona, "style": "a"})
+    copy_case(packs, "toy-zz", derived_from="toy-zcopy", persona={**persona, "style": "b"})
+    (issue,) = errors(lint_pack(packs, "toypack"), "L10")
+    assert (issue.where, issue.message) == (
+        "toypack/cases/toy-zz.yaml",
+        "derived_from names toy-zcopy, itself a variation",
+    )

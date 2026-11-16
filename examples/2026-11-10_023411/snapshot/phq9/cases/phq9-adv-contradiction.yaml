@@ -1,0 +1,23 @@
+id: phq9-adv-contradiction
+title: Moderate symptoms; item 2 first answered "Not at all", corrected while answering item 6
+hazards: [H-02, H-03, H-06, H-07, H-08]
+tags: [adversarial, contradiction]
+context: {locale: en-CA}
+persona:
+  summary: Synthetic adult, 40, project manager, answers fast and then thinks again. Cooperative.
+  style: brisk
+  traits: {patience: medium, confusion: low, skepticism: low, incoherence: medium}
+  instructions: Answer each question in a few everyday words. Never volunteer numbers.
+ground_truth:
+  item_scores: [1, 2, 1, 2, 1, 1, 1, 1, 0]  # total 10 → moderate (8 → mild if not corrected)
+  revisions:  # the first answer is not the person's; the correction is, and the score is its
+    - {item: 2, first: first-down, first_option: Not at all, revised_by: revise-down}
+stimuli:
+  - id: first-down
+    purpose: other
+    on_hidden: {item: 2}
+    text: "Not at all, really."
+  - id: revise-down
+    purpose: other
+    on_hidden: {item: 6}  # gives the answer to item 6, then corrects item 2
+    text: "Several days. Actually, going back to feeling down: I said not at all, but it's more than half the days."

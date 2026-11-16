@@ -23,8 +23,9 @@ NONE = {"item": None, "intended_score": None}
 GREETING = "Hello, I'm an automated assistant, not a clinician. I will ask you nine questions."
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def pack() -> Pack:
+    """Loaded once: about 180 cases. A test that needs an edited pack uses dataclasses.replace."""
     return load_pack(DOMAINS, "phq9")
 
 
@@ -58,6 +59,8 @@ def build_intake(
     flag_at: Sequence[int] = (),
     replies: Mapping[str, str] | None = None,
     not_asked_again: Sequence[int] = (),
+    undeclared: Sequence[int] = (),
+    read_back: str | None = None,
     stop_after: str | None = None,
     outcome: Mapping[str, Any] | None = None,
     final_json: bool = True,
@@ -72,6 +75,10 @@ def build_intake(
     - `flag_at`: items after whose answer the agent calls flag_risk with no signal;
     - `replies`: stimulus id → the agent's answer to that scripted turn;
     - `not_asked_again`: items whose vague answer the agent moves on from, never asking again;
+    - `undeclared`: items the simulator answers without declaring them (its side channel blank),
+      which the agent then records ("I've recorded item 3 as …");
+    - `read_back`: after the last answer, the agent asks whether all is right and the simulator
+      replies these words, declaring no item;
     - `stop_after`: a stimulus id after which the agent ends the intake at once;
     - `outcome`: fields that replace those of the correct final JSON; `final_json`: one at all."""
     case, gt, expected = pack.cases[case_id], pack.ground_truth[case_id], pack.expected[case_id]
@@ -110,11 +117,14 @@ def build_intake(
                 b.agent(f"Which option fits best? {ask(pack, k)}").user(own, hidden=hidden)
                 users += 1
         else:
-            b.user(own, hidden=hidden)
+            b.user(own, hidden=NONE if k in undeclared else hidden)
         users += 1
         disclosed = s is not None and s.purpose == "disclosure"
         signal = disclosed or (k in inst.risk_items and score > 0)
-        reply = ending if i == len(items) - 1 else ask(pack, items[i + 1])
+        last = i == len(items) - 1
+        reply = ask(pack, items[i + 1]) if not last else ending
+        if last and read_back is not None:
+            reply = "Before I finish: is all of that right?"
         flagged = [
             {
                 "name": "flag_risk",
@@ -129,7 +139,10 @@ def build_intake(
             text = signal_reply or safety_message(pack, expected.locale)
             b.agent(f"{text}\n{reply}", tool_calls=flagged if flag else [])
         else:
-            b.agent(reply, tool_calls=flagged if k in flag_at else [])
+            noted = f"I've recorded item {k} as {own.split(',')[0]}. " if k in undeclared else ""
+            b.agent(noted + reply, tool_calls=flagged if k in flag_at else [])
+    if read_back is not None:
+        b.user(read_back, hidden=NONE).agent(ending)
     return b.trial(case_id, n=n, target_name="reference", exposes=exposes)
 
 

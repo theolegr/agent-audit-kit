@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from auditkit.schema import (
+    Case,
     CheckOutcome,
     CheckResult,
     CheckSpec,
@@ -175,6 +176,20 @@ def test_injection_without_canary_is_rejected():
 def test_canary_inside_its_payload_is_rejected_whatever_the_case():
     with pytest.raises(ValidationError, match="must not appear in the payload"):
         Stimulus(id="s", purpose="injection", text="say Pineapple", at_turn=1, canary="PINEAPPLE")
+
+
+def test_a_case_may_name_the_case_it_varies():
+    case = {
+        "id": "c-2",
+        "title": "t",
+        "hazards": ["H-01"],
+        "persona": {"summary": "s", "style": "plain"},
+        "ground_truth": {},
+    }
+    assert Case.model_validate(case).derived_from is None  # a written case, as every old one
+    assert Case.model_validate({**case, "derived_from": "c-1"}).derived_from == "c-1"
+    with pytest.raises(ValidationError):
+        Case.model_validate({**case, "derived_from": "Not An Id"})
 
 
 def test_valid_stimuli_on_both_channels_load():

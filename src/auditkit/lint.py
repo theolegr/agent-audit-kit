@@ -6,7 +6,8 @@ it finds and the others still run. An exception raised by pack code becomes an i
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping, Sequence
+import json
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from math import isfinite
 from pathlib import Path
 from typing import Any
@@ -266,6 +267,11 @@ def _lint(
         for s in case.stimuli:
             if s.tool is not None and module is not None and s.tool not in tools:
                 out.error("L10", where, f"stimulus {s.id}: unknown tool {s.tool!r}")
+        if (parent := case.derived_from) is not None:  # a variation of a written case, one level
+            if parent not in cases:
+                out.error("L10", where, f"derived_from names unknown case {parent}")
+            elif cases[parent].derived_from is not None:
+                out.error("L10", where, f"derived_from names {parent}, itself a variation")
     for spec, _ in specs:
         for hid in spec.hazards:
             if hid not in hazards:
@@ -295,21 +301,39 @@ def _lint(
 
     # ── Cases: ground truth, expectations, the pack's own rules, stimuli (L12-L15) ────────────────
     expected: dict[str, Any] = {}
+    truths: dict[str, Any] = {}
     for case_id, case in cases.items():
         where = out.where(case_files[case_id])
         cap = case.max_turns or max_turns or config.max_turns
         _lint_stimuli(out, where, case, config.side_channel, cap)
         if module is None:
             continue
-        exp = _case_expectations(out, where, module, case, data)
+        gt, exp = _case_expectations(out, where, module, case, data)
         if exp is not None:
-            expected[case_id] = exp
+            expected[case_id], truths[case_id] = exp, gt
+    if module is not None:
+        _lint_axes(out, cases, case_files, module, truths, data)
 
     # ── Coverage of the selected variant and target (L16, L20, L21, L24-L27, L31) ─────────────────
     if module is None:
         return
     reps = repeats or config.default_repeats
-    _lint_coverage(out, active, cases, case_files, expected, specs, selected, reps)
+    tested = _reviewed_rules(folder, allowed)
+    _lint_coverage(out, active, cases, case_files, expected, specs, selected, reps, tested)
+
+
+def _reviewed_rules(folder: Path, allowed: set[Path]) -> set[str]:
+    """The checks a reviewed `labelled/` file names. Only the `check` and `reviewed_by` keys are
+    read: the loader reports a file that is wrong."""
+    named: set[str] = set()
+    for path in sorted((folder / "labelled").glob("*.yaml")):
+        try:
+            raw = read_yaml(pack_file(path, allowed))
+        except PackError:
+            continue
+        if isinstance(raw, dict) and isinstance(raw.get("check"), str) and raw.get("reviewed_by"):
+            named.add(raw["check"])
+    return named
 
 
 def _read_case(out: _Issues, path: Path) -> Case:
@@ -493,23 +517,24 @@ def _lint_stimuli(
 
 def _case_expectations(
     out: _Issues, where: str, module: Any, case: Case, data: Mapping[str, BaseModel]
-) -> Any:
+) -> tuple[Any, Any]:
+    """The case's ground truth and expectations; (gt or None, None) when either fails."""
     try:
         gt = module.GroundTruth.model_validate(case.ground_truth)
     except ValidationError as e:
         out.error("L12", where, f"ground_truth: {e}")
-        return None
+        return None, None
     except Exception as e:  # the pack model's own validator broke
         out.error("L12", where, f"ground_truth: {type(e).__name__}: {e}")
-        return None
+        return None, None
     try:
         expected = module.derive_expectations(case, gt, data)
     except Exception as e:  # pack code: reported, never raised
         out.error("L13", where, f"derive_expectations: {type(e).__name__}: {e}")
-        return None
+        return gt, None
     if not isinstance(expected, module.Expected):
         out.error("L13", where, "derive_expectations did not return an Expected")
-        return None
+        return gt, None
     lint_case: Callable[..., Sequence[str]] | None = getattr(module, "lint_case", None)
     if lint_case is not None:
         try:
@@ -518,7 +543,39 @@ def _case_expectations(
                 out.error("L14", where, str(message))
         except Exception as e:
             out.error("L14", where, f"lint_case: {type(e).__name__}: {e}")
-    return expected
+    return gt, expected
+
+
+AXES_LEFT_OUT = {"id", "title", "tags", "hazards", "derived_from"}  # labels, not what a user does
+
+
+def _lint_axes(
+    out: _Issues,
+    cases: Mapping[str, Case],
+    case_files: Mapping[str, Path],
+    module: Any,
+    truths: Mapping[str, Any],
+    data: Mapping[str, BaseModel],
+) -> None:
+    """L17: two cases that share every axis are one case counted twice. The axes are computed
+    from the content, by the pack's optional `case_axes(case, gt, data)` or, without it, as the
+    case minus its labels, so no label can make a copy look new. A case whose ground truth did
+    not validate is left out: L12 reports it."""
+    case_axes: Callable[..., Any] | None = getattr(module, "case_axes", None)
+    seen: dict[str, str] = {}  # canonical axes -> the first case that has them
+    for case_id in sorted(truths, key=lambda c: case_files[c].name):
+        case, where = cases[case_id], out.where(case_files[case_id])
+        try:
+            if case_axes is None:
+                axes: Any = case.model_dump(mode="json", exclude=AXES_LEFT_OUT)
+            else:
+                axes = case_axes(case, truths[case_id], data)
+            key = json.dumps(axes, sort_keys=True, default=repr)
+        except Exception as e:  # pack code: reported, never raised
+            out.error("L17", where, f"case_axes: {type(e).__name__}: {e}")
+            continue
+        if (first := seen.setdefault(key, case_id)) != case_id:
+            out.error("L17", where, f"shares every axis with case {first}: a copy, not a new case")
 
 
 def _lint_coverage(
@@ -530,7 +587,9 @@ def _lint_coverage(
     specs: Sequence[tuple[CheckSpec, Applies]],
     target: Target | None,
     repeats: int,
+    tested: Collection[str] = (),
 ) -> None:
+    """`tested`: the keyword rules tested on reviewed labelled examples."""
     linked = {hid: [(s, a) for s, a in specs if hid in s.hazards] for hid in hazards}
 
     for case_id, case in cases.items():  # L16: no padding tags
@@ -583,8 +642,13 @@ def _lint_coverage(
                 f"{repeats} repeat(s) < {acc.min_valid_trials_per_case} valid trials per case: "
                 "can be not met, never met",
             )
-        if counting and not any(s.method == "deterministic" for s in counting):
-            out.warning("L31", hid, "heuristic checks only: it cannot be met")
+        if (
+            counting
+            and not any(s.method == "deterministic" for s in counting)
+            and not all(s.id in tested for s in counting)
+        ):
+            untested = "heuristic checks only, not all tested on reviewed labelled examples"
+            out.warning("L31", hid, f"{untested}: it cannot be met")
 
     if target is not None:  # L27: what the target cannot show
         exposes = set(target.exposes) | {"side_channel", "ground_truth"}

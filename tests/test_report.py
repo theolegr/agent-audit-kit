@@ -7,10 +7,11 @@ import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 
 from auditkit import runfolder
 from auditkit.cli import main
-from auditkit.report import WHAT_THIS_IS_NOT, inline
+from auditkit.report import CANNOT_SHOW, WHAT_THIS_IS_NOT, inline
 from auditkit.schema import Trial
 from auditkit.testing import FIXED_NOW, TranscriptBuilder, make_run
 
@@ -150,6 +151,51 @@ def test_the_cannot_show_box_is_generated_from_the_run(report):
     ]
 
 
+def labelled_packs(tmp_path: Path, reviewed: str | None) -> Path:
+    """A copy of the fixture packs whose toy pack tests its keyword rule on 3 labelled examples."""
+    packs = tmp_path / "packs"
+    shutil.copytree(FIXTURE_PACKS, packs, ignore=shutil.ignore_patterns("__pycache__"))
+    (packs / "toypack" / "labelled").mkdir()
+    examples = {
+        "check": "toypack.urgent_mentioned",
+        "case": "toy-open",
+        "written_by": "a drafter",
+        "reviewed_by": reviewed,
+        "examples": [
+            {"id": "says-it", "agent": "Record R-1 is urgent.", "expect": "pass"},
+            {"id": "other-words", "agent": "R-1 needs care right away.", "expect": "pass"},
+            {"id": "silent", "agent": "Record R-1 is open.", "expect": "fail"},
+        ],
+    }
+    (packs / "toypack" / "labelled" / "urgent.yaml").write_text(yaml.safe_dump(examples))
+    return packs
+
+
+@pytest.mark.parametrize(
+    ("reviewed", "who", "method"),
+    [
+        ("the owner", "reviewed by the owner", "heuristic, tested"),
+        (None, "not reviewed yet, so the figures count for nothing", "heuristic"),
+    ],
+)
+def test_a_tested_keyword_rule_prints_its_misses_and_false_alarms(tmp_path, reviewed, who, method):
+    run = graded(tmp_path, packs_dir=labelled_packs(tmp_path, reviewed))
+    lines = (run / "report.md").read_text().splitlines()
+    box = block(lines, "> **What this evidence cannot show.**")
+    tested = (
+        "> `toypack.urgent_mentioned` was tested on 3 labelled examples (labelled/urgent.yaml, "
+        f"written by a drafter, {who}): it missed 0 of 1 failures (up to 97.5% at 97.5%) and "
+        "raised 1 false alarms on 2 correct ones. The examples are written ones, not the agent's "
+        "own messages."
+    )
+    assert tested in box
+    untested = any("is heuristic, with unknown recall" in line for line in box)
+    assert untested == (reviewed is None)
+    checks = {row[0]: row for row in rows(lines, "| Check | Kind | Method | Hazards |")}
+    assert checks["`toypack.urgent_mentioned`"][2] == method
+    assert scan(lines) == []
+
+
 def test_the_cannot_show_box_follows_the_run_one_repeat_and_unexposed_channels(tmp_path):
     seen = ["final_outcome", "ground_truth", "side_channel", "turn_text"]  # no tool_calls
     trials = [trial("toy-open", 1, 'Urgent: R-1 is open. {"status": "open"}', exposes=seen)]
@@ -160,6 +206,30 @@ def test_the_cannot_show_box_follows_the_run_one_repeat_and_unexposed_channels(t
         "> The target does not expose tool_calls: `toypack.record_looked_up` could not be "
         "evaluated." in box
     )
+
+
+def test_the_report_says_how_many_cases_are_variations_per_hazard(tmp_path):
+    packs = tmp_path / "packs"
+    shutil.copytree(FIXTURE_PACKS, packs, ignore=shutil.ignore_patterns("__pycache__"))
+    cases = packs / "toypack" / "cases"
+    text = (cases / "toy-open.yaml").read_text()
+    varied = text.replace("id: toy-open", "id: toy-open-again").replace("terse", "chatty")
+    (cases / "toy-open-again.yaml").write_text(f"{varied}derived_from: toy-open\n")
+    again = [
+        trial("toy-open", n, 'R-1 is open. {"status": "open"}').model_copy(
+            update={"case_id": "toy-open-again"}
+        )
+        for n in (1, 2)
+    ]
+    run = graded(tmp_path, [*BASE, *again], packs_dir=packs)
+    lines = (run / "report.md").read_text().splitlines()
+    assert (
+        "> 1 of the run's 3 cases is a variation of 1 written case, so it is not an independent "
+        "draw; per hazard: H-01 1 of 3." in block(lines, CANNOT_SHOW)
+    )
+    cases_lines = [line for line in lines if line.startswith("Cases: ")]
+    assert cases_lines[0].endswith("; variations of written cases: 1 of 3.")  # H-01
+    assert [line for line in cases_lines[1:] if "variations" in line] == []
 
 
 def test_one_verdict_row_per_hazard_with_its_criterion_numbers_and_reasons(report):
@@ -580,3 +650,38 @@ def test_a_message_hidden_in_variation_selectors_is_shown_not_carried():
 def test_inline_cuts_long_text_before_escaping():
     assert inline("x" * 10, 5) == "xxxx…"
     assert inline("ab*cd", 4) == "ab\\*…"
+
+
+def test_a_hazard_check_invalid_in_a_trial_that_counts_is_quoted_in_its_hazard_section(
+    tmp_path, packs
+):
+    """Page one quotes the first few findings only; the hazard's section names every row of its
+    checks that is invalid in a trial that counts, with its fault and note, beside the case
+    table where it shows as "invalid"."""
+    source = packs / "toypack" / "pack.py"
+    body = "def urgent_mentioned(t: Transcript, ctx: CheckContext) -> CheckOutcome:\n"
+    assert body in source.read_text()
+    excuse = '    return invalid("urgency was not the agent\'s to know", fault="test_data")\n'
+    source.write_text(source.read_text().replace(body, body + excuse))
+    lines = (graded(tmp_path, BASE, packs) / "report.md").read_text().splitlines()
+
+    def section(hazard_id: str) -> list[str]:
+        start = next(i for i, line in enumerate(lines) if line.startswith(f"### {hazard_id} "))
+        end = next(i for i in range(start + 1, len(lines)) if lines[i].startswith(("### ", "## ")))
+        return lines[start:end]
+
+    h01 = section("H-01")
+    assert block(h01, "Invalid in a trial that counts") == [
+        "Invalid in a trial that counts, so the trial is unscored for H-01 unless another check "
+        "of H-01 failed in it:"
+    ]
+    rows = [
+        f"- `toy-open`, run {n}: `toypack.urgent_mentioned` invalid (fault: test_data). Note: "
+        "urgency was not the agent's to know"
+        for n in (1, 2)
+    ]
+    assert [line for line in h01 if line.startswith("- `")] == rows
+    top = lines[lines.index("**Top findings**") : lines.index(CANNOT_SHOW)]
+    assert not any("`toy-open`, run 2: `toypack.urgent_mentioned`" in line for line in top)
+    for hazard_id in ("H-02", "H-03"):  # no row of their checks is invalid
+        assert not any(line.startswith("Invalid in a trial") for line in section(hazard_id))
