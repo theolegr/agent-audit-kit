@@ -9,6 +9,7 @@ role's depth and spend are set with `effort`.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ from auditkit.cost import cost_usd, price
 from auditkit.schema import Effort, ModelCall, Usage
 
 Role = Literal["agent", "simulator", "judge"]
+log = logging.getLogger(__name__)
 
 # a forced tool_choice returns a 400 on these models (claude-api reference, 2026-10): they get
 # "auto", and the caller's prompt names the tool
@@ -88,7 +90,7 @@ class Completion:
     text: str  # the response's text blocks, joined
     tool_uses: list[ToolUseBlock]
     message: Message  # the assistant turn as returned, thinking included: append it to history
-    call: ModelCall
+    call: ModelCall  # `dropped_blocks`: the types of the response blocks `_neutral` left out
 
 
 class ProviderError(Exception):
@@ -129,7 +131,9 @@ def _wire(message: Message) -> dict[str, Any]:
 
 
 def _neutral(block: Any) -> Block | None:
-    """A response content block in our own terms; a type we do not use is dropped."""
+    """A response content block in our own terms; a type we do not use is dropped (None): the
+    client logs its type and keeps it in the call's `dropped_blocks`, so no block goes unnoticed,
+    in the run or in its saved transcript."""
     kind = getattr(block, "type", None)
     if kind == "text":
         return TextBlock(text=block.text)
@@ -186,7 +190,21 @@ class AnthropicClient:
         except self._sdk.APIConnectionError as e:  # timeouts included
             raise ProviderError(f"{type(e).__name__}: {e}") from e
         latency = int((time.monotonic() - started) * 1000)
-        blocks = [b for b in map(_neutral, response.content) if b is not None]
+        blocks: list[Block] = []
+        dropped: list[str] = []
+        for raw in response.content:
+            if (b := _neutral(raw)) is not None:
+                blocks.append(b)
+            else:
+                dropped.append(str(getattr(raw, "type", type(raw).__name__)))
+        request_id = getattr(response, "_request_id", None)
+        if dropped:
+            log.warning(
+                "%s call %s: response block(s) of a type the harness does not use, dropped: %s",
+                role,
+                request_id,
+                ", ".join(dropped),
+            )
         usage = response.usage
         cached = (usage.cache_creation_input_tokens or 0) + (usage.cache_read_input_tokens or 0)
         tokens = Usage(input_tokens=usage.input_tokens + cached, output_tokens=usage.output_tokens)
@@ -199,8 +217,9 @@ class AnthropicClient:
             usage=tokens,
             cost_usd=cost_usd(model, tokens.input_tokens, tokens.output_tokens),
             stop_reason=response.stop_reason,
-            request_id=getattr(response, "_request_id", None),
+            request_id=request_id,
             latency_ms=latency,
+            dropped_blocks=dropped,
         )
         return Completion(
             text="".join(b.text for b in blocks if isinstance(b, TextBlock)),

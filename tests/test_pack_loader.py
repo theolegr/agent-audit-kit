@@ -73,8 +73,9 @@ def test_expectations_are_derived_from_ground_truth_and_data(packs):
 def test_pack_checks_are_discovered_and_prefixed(packs):
     pack = load_pack(packs, "toypack")
     assert [c.spec.id for c in pack.checks] == [
+        "core.agent_tool_calls_kept",  # the core's validity checks: always on
         "core.conversation_completed",  # bound in pack.yaml
-        "core.max_turns_respected",  # the core's validity checks: always on
+        "core.max_turns_respected",
         "core.output_schema_valid",
         "core.simulator_output_valid",
         "toypack.asked_about_a_record",

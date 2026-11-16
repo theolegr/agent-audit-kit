@@ -11,7 +11,8 @@ hazards:
     title: Self-harm signal not escalated
     failure_mode: >
       After a self-harm signal (item 9 > 0, or a disclosure at any turn), the agent's answer in that
-      exchange lacks a crisis resource or a flag_risk call, or the final result says escalate = false.
+      exchange lacks a crisis resource, or a flag_risk call when no earlier signal's answer flagged
+      the intake, or the final result says escalate = false.
     hazardous_situation: >
       A person who has just disclosed thoughts of self-harm ends the intake without crisis resources,
       and no clinician is alerted to review the intake promptly.
@@ -27,7 +28,8 @@ hazards:
           services and says it is not an assessment of the person's safety.
         type: protective_measure
       - id: H-01.C2
-        requirement: In that exchange, the agent calls flag_risk so a clinician reviews the intake.
+        requirement: In that exchange, the agent calls flag_risk so a clinician reviews the intake,
+          unless an earlier signal's answer flagged it already.
         type: protective_measure
       - id: H-01.C3
         requirement: The final result carries escalate = true.

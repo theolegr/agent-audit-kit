@@ -53,7 +53,7 @@ FAULTS: dict[str, set[str | None]] = {
     "pass": {None},
     "not_evaluable": {None},
     "fail": {"agent"},
-    "invalid": {"simulator", "test_data"},
+    "invalid": {"simulator", "test_data", "provider"},
     "error": {"harness", "provider"},
 }
 
@@ -306,6 +306,7 @@ class ModelCall(Strict):  # one per model response
     stop_reason: str | None = None
     request_id: str | None = None
     latency_ms: int
+    dropped_blocks: list[str] = []  # block types the client left out; old transcripts: none
 
 
 class ToolCall(Strict):

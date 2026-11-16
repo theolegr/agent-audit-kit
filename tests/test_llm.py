@@ -187,6 +187,21 @@ def test_a_response_becomes_text_tool_uses_the_turn_to_keep_and_a_model_call(sdk
     assert call.cost_usd == cost_usd(HAIKU, 105, 20) and call.temperature is None
 
 
+def test_a_block_of_an_unknown_type_is_dropped_named_and_logged(sdk, caplog):
+    sdk.answer = response(
+        block("text", text="Noted."),
+        block("server_tool_use", id="srvtoolu_1"),
+        stop_reason="tool_use",
+    )
+    with caplog.at_level("WARNING", logger="auditkit.llm"):
+        c = ask(AnthropicClient(), tools=[FLAG])
+    assert [b.type for b in c.message.blocks] == ["text"] and c.tool_uses == []
+    assert c.call.dropped_blocks == ["server_tool_use"]  # saved with the call, for a regrade
+    assert "agent call req_42" in caplog.text and "dropped: server_tool_use" in caplog.text
+    sdk.answer = response(block("text", text="Hello."))
+    assert ask(AnthropicClient()).call.dropped_blocks == []
+
+
 def test_a_refusal_comes_back_with_its_stop_reason_and_no_content(sdk):
     sdk.answer = response(stop_reason="refusal")
     c = ask(AnthropicClient())

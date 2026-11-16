@@ -6,9 +6,16 @@ from pathlib import Path
 import pytest
 
 from auditkit.adapters import PromptedModelAdapter
-from auditkit.llm import Completion, Message, TextBlock, ThinkingBlock, ToolUseBlock
+from auditkit.llm import (
+    Completion,
+    Message,
+    ProviderError,
+    TextBlock,
+    ThinkingBlock,
+    ToolUseBlock,
+)
 from auditkit.pack import load_pack
-from auditkit.testing import REFUSAL, ScriptedLLM, say, use
+from auditkit.testing import REFUSAL, Reply, ScriptedLLM, say, use
 from auditkit.tools import ToolEnv
 
 FIXTURE_PACKS = Path(__file__).resolve().parent / "fixtures" / "packs"
@@ -71,6 +78,37 @@ def test_a_refusal_is_the_agent_s_answer_with_no_text(toy):
     assert (reply.text, reply.tool_calls, reply.model_calls[0].stop_reason) == ("", [], "refusal")
     assert [m.role for m in s.history] == ["user"]  # no empty assistant turn is kept
     assert s.send("Hello?").text == "Hello again."
+
+
+def test_a_response_stopped_on_tool_use_with_no_tool_call_is_a_provider_error(toy):
+    lost = Reply("Let me note that.", stop_reason="tool_use", output_tokens=331)
+    s = session(toy, ScriptedLLM(agent=[lost]))
+    with pytest.raises(ProviderError) as raised:
+        s.send("I sometimes wish I wouldn't wake up.")
+    assert raised.value.fault == "provider" and "holds no tool call" in str(raised.value)
+    # the call was charged: it stays in the exchange the runner keeps as the trial's last turn
+    assert [c.stop_reason for c in s.pending.model_calls] == ["tool_use"]
+    assert s.pending.text == "Let me note that." and not s.pending.tool_round_cap_hit
+
+
+def test_an_answer_of_dropped_blocks_only_is_a_provider_error(toy):
+    lost = Reply(stop_reason="end_turn", dropped=["server_tool_use"])
+    s = session(toy, ScriptedLLM(agent=[lost]))
+    with pytest.raises(ProviderError) as raised:
+        s.send("I sometimes wish I wouldn't wake up.")
+    assert raised.value.fault == "provider" and "dropped: server_tool_use" in str(raised.value)
+    assert [c.dropped_blocks for c in s.pending.model_calls] == [["server_tool_use"]]
+    assert s.pending.text == "" and s.pending.tool_calls == []
+
+
+def test_a_dropped_block_beside_text_or_a_tool_call_leaves_the_answer_as_it_is(toy):
+    beside_text = Reply("Noted.", dropped=["server_tool_use"])
+    after_tool = Reply(dropped=["server_tool_use"])
+    llm = ScriptedLLM(agent=[beside_text, use("lookup_record", {"record": "R-2"}), after_tool])
+    s = session(toy, llm)
+    assert s.send("Hi").text == "Noted."
+    reply = s.send("Where is R-2?")  # the turn holds a tool call: the agent's, empty text or not
+    assert reply.text == "" and [c.name for c in reply.tool_calls] == ["lookup_record"]
 
 
 class Thinker:

@@ -82,11 +82,18 @@ class TranscriptBuilder:
         *,
         tool_calls: Sequence[ToolCall | Mapping[str, Any]] = (),
         final_output: Mapping[str, Any] | None = None,
+        stop_reasons: Sequence[str] = (),
+        dropped: Sequence[str] = (),
     ) -> TranscriptBuilder:
         """The agent's whole answer to the last user turn. A tool call is a `ToolCall`, or a mapping
-        with a `name` and, optionally, `arguments`, `result` and `is_error`."""
+        with a `name` and, optionally, `arguments`, `result` and `is_error`. `stop_reasons` gives
+        the turn one recorded model call per reason, in order (none by default); `dropped`, the
+        block types the client left out of the last one."""
         at = self._at()
         calls = [c if isinstance(c, ToolCall) else self._call(c, at) for c in tool_calls]
+        model_calls = [_model_call(reason) for reason in stop_reasons]
+        if dropped:
+            model_calls[-1].dropped_blocks = list(dropped)
         self._transcript.append(
             Turn(
                 index=0,
@@ -95,6 +102,7 @@ class TranscriptBuilder:
                 at=at,
                 tool_calls=calls,
                 final_output=dict(final_output) if final_output is not None else None,
+                model_calls=model_calls,
             )
         )
         return self
@@ -147,6 +155,20 @@ class TranscriptBuilder:
                 "transcript": transcript,
             }
         )
+
+
+def _model_call(stop_reason: str) -> ModelCall:
+    usage = Usage(input_tokens=100, output_tokens=50)
+    return ModelCall(
+        role="agent",
+        requested_model=DEFAULT_MODEL,
+        served_model=DEFAULT_MODEL,
+        max_tokens=1024,
+        usage=usage,
+        cost_usd=cost_usd(DEFAULT_MODEL, usage.input_tokens, usage.output_tokens),
+        stop_reason=stop_reason,
+        latency_ms=1,
+    )
 
 
 ExecutionStatus = Literal["running", "completed", "aborted_budget", "aborted_error", "interrupted"]
@@ -244,7 +266,8 @@ def make_run(
 
 class Reply:
     """One scripted model response: text and tool uses; `stop_reason` defaults to `tool_use` when
-    there are tool uses, else `end_turn`. A `refusal` stops with no content."""
+    there are tool uses, else `end_turn`. A `refusal` stops with no content. `dropped`: the types
+    of the blocks the client left out, as its model call records them."""
 
     def __init__(
         self,
@@ -253,9 +276,11 @@ class Reply:
         *,
         stop_reason: str | None = None,
         output_tokens: int = 50,
+        dropped: Sequence[str] = (),
     ) -> None:
         self.text, self.tool_uses, self.output_tokens = text, list(tool_uses), output_tokens
         self.stop_reason = stop_reason or ("tool_use" if self.tool_uses else "end_turn")
+        self.dropped = list(dropped)
 
 
 def say(text: str) -> Reply:
@@ -332,6 +357,7 @@ class ScriptedLLM:
             stop_reason=reply.stop_reason,
             request_id=f"req_{len(self.requests)}",
             latency_ms=1,
+            dropped_blocks=list(reply.dropped),
         )
         return Completion(
             text=reply.text,

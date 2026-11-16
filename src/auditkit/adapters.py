@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from auditkit.llm import LLMClient, Message, TextBlock, ToolResultBlock, ToolSpec
+from auditkit.llm import LLMClient, Message, ProviderError, TextBlock, ToolResultBlock, ToolSpec
 from auditkit.schema import ModelCall, Target, ToolCall
 from auditkit.tools import ToolDef, ToolEnv, execute_tool, now
 
@@ -38,7 +38,10 @@ class PromptedSession:
 
     def send(self, text: str) -> AgentReply:
         """The agent's whole answer to `text`. It is built in place in `pending`, so a call that
-        raises midway leaves what the exchange already did (calls charged, mock tools run)."""
+        raises midway leaves what the exchange already did (calls charged, mock tools run). A
+        response that stops to use a tool yet holds no tool call raises `ProviderError`, as does
+        an answer with no text and no tool call whose response held a block the client dropped:
+        what the model sent was lost, and an empty turn would read as the agent's."""
         a, target = self.adapter, self.adapter.target
         self.history.append(Message(role="user", blocks=[TextBlock(text=text)]))
         reply = self.pending = AgentReply("", [], [])
@@ -59,7 +62,21 @@ class PromptedSession:
             if c.text:
                 texts.append(c.text)
                 reply.text = "\n\n".join(texts)
+            dropped = c.call.dropped_blocks
+            lost = f"; dropped: {', '.join(dropped)}" if dropped else ""
+            if c.call.stop_reason == "tool_use" and not c.tool_uses:
+                # the tool call was lost on the way: an empty turn is never the agent's answer
+                raise ProviderError(
+                    f"the agent's response stopped to use a tool but holds no tool call "
+                    f"(request {c.call.request_id}{lost})"
+                )
             if not c.tool_uses:
+                if dropped and not reply.text and not reply.tool_calls:
+                    # all the model answered was left out: an empty turn is never the agent's
+                    raise ProviderError(
+                        f"the agent's answer holds no text and no tool call, only response "
+                        f"block(s) the harness does not use (request {c.call.request_id}{lost})"
+                    )
                 return reply
             if c.call.stop_reason != "tool_use" or round_no == target.max_tool_rounds:
                 # unrun calls still get a result, so the history stays valid as sent

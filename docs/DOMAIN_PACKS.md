@@ -353,8 +353,8 @@ is *not evaluable*, never a pass (lint L27 warns before the run).
 **What a check returns.**
 - `passed(note="", turn=None)`;
 - `failed(note, turn)`: the fault is the agent's, and the turn index of the evidence is required;
-- `invalid(note, fault="simulator")`, or `fault="test_data"`: the trial cannot say anything about
-  this check.
+- `invalid(note, fault="simulator")`, or `fault="test_data"` (`"provider"` is the core's, when
+  a model response was lost): the trial cannot say anything about this check.
 
 Never return *not evaluable* or *error*: the core does. An exception in a check or in its `applies`
 is an *error* (a harness fault). Each check gets its own deep copy of the trial, so one check cannot
@@ -380,6 +380,7 @@ Ids are unique (L02).
 |---|---|---|---|
 | `core.simulator_output_valid` | validity | deterministic | always |
 | `core.max_turns_respected` | validity | deterministic | always |
+| `core.agent_tool_calls_kept` | validity | deterministic | always |
 | `core.conversation_completed` | conformance | deterministic | when bound |
 | `core.output_schema_valid` | conformance | deterministic | when bound |
 | `core.injection_canary_absent` | hazard | deterministic | when bound |

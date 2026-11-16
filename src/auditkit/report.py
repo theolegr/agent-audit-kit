@@ -144,6 +144,14 @@ def _said(note: str) -> str:
     return f" Note: {inline(note, NOTE_LIMIT)}" if note.strip() else ""
 
 
+def _invalid_label(faults: set[str | None]) -> str:
+    """Whose an invalid result is, as a finding names it: the test data's (the simulator's or the
+    cases') or the provider's (a model response lost on the way, never the test data's)."""
+    if "provider" not in faults:
+        return "Test data"
+    return "Provider fault" if faults == {"provider"} else "Test data and provider fault"
+
+
 def _table(header: Sequence[str], rows: Iterable[Sequence[str]]) -> list[str]:
     """A GFM table. Every cell is already escaped (`inline`) or built from validated ids."""
     lines = [f"| {' | '.join(header)} |", f"|{'---|' * len(header)}"]
@@ -542,13 +550,15 @@ class _Report:
                         text += _said(r.note)
                         out.append(((3, g.case_id, g.n, r.check_id), text, []))
             if g.status == "invalid":
-                text = f"**Test data** — {where}, invalid (not counted): {self._reasons(g)}."
+                label = _invalid_label(self._voided_by(g))
+                text = f"**{label}** — {where}, invalid (not counted): {self._reasons(g)}."
                 out.append(((4, g.case_id, g.n), text, []))
             elif g.status == "valid":
                 for r in g.results:
                     if r.outcome == "invalid":
                         text = (
-                            f"**Test data** — {where}: `{r.check_id}`{self._linked(r.check_id)} "
+                            f"**{_invalid_label({r.fault})}** — {where}: "
+                            f"`{r.check_id}`{self._linked(r.check_id)} "
                             f"invalid (fault: {r.fault}).{_said(r.note)}"
                         )
                         out.append(((4, g.case_id, g.n, r.check_id), text, []))
@@ -568,6 +578,16 @@ class _Report:
             f"{stats.valid_trials - stats.unscored_trials} scored trials passed "
             f"(pass@1 {stats.pass_at_1:.2f}, pass^{stats.k} {hat})."
         )
+
+    def _voided_by(self, grade: TrialGrade) -> set[str | None]:
+        """The faults of the validity results that made a trial invalid."""
+        return {
+            r.fault
+            for r in grade.results
+            if r.outcome == "invalid"
+            and (spec := self.specs.get(r.check_id)) is not None
+            and spec.kind == "validity"
+        }
 
     def _reasons(self, grade: TrialGrade) -> str:
         return (
@@ -1019,6 +1039,14 @@ class _Report:
             )
             rows = [[f"`{g.case_id}`", str(g.n), g.status, self._reasons(g)] for g in voided]
             lines += _table(["Case", "Run", "Status", "Reasons"], rows)
+            lost = [g for g in voided if g.status == "invalid" and "provider" in self._voided_by(g)]
+            if lost:
+                where = "; ".join(f"`{g.case_id}`, run {g.n}" for g in lost)
+                lines += [
+                    f"A provider fault voided {where}: a model response was lost on the way, "
+                    "which says nothing about the cases, the simulator or the agent.",
+                    "",
+                ]
         simulator = next((info for info in self.manifest.models if info.role == "simulator"), None)
         if simulator is not None:
             served = (

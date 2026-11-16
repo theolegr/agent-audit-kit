@@ -76,6 +76,8 @@ def test_format_v1_transcript_loads():
     assert trial.stop_reason == "outcome_emitted"
     assert trial.transcript.turns[1].tool_calls[0].name == "lookup_record"
     assert trial.transcript.turns[0].hidden == {"asking_about": "R-2"}
+    # a call saved before calls recorded their dropped blocks loads with none
+    assert trial.transcript.turns[1].model_calls[0].dropped_blocks == []
 
 
 def test_trial_json_round_trip_is_identical():

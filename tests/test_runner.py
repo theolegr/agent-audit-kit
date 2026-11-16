@@ -453,6 +453,35 @@ def test_an_exchange_cut_short_keeps_what_it_did_and_paid_for(tmp_path):
     assert len(paid) == 2 and sum(paid) == pytest.approx(got["cost_usd"])
 
 
+def test_a_lost_tool_call_errors_the_trial_on_the_provider_never_an_empty_agent_turn(tmp_path):
+    replies = [Reply(stop_reason="tool_use", output_tokens=331)]
+    code, run = live(tmp_path, scripted(agent=replies), "--repeats", "1")
+    got = trial(run, "toy-open", 1)
+    assert (code, got["status"], got["stop_reason"], got["fault"]) == (
+        4,
+        "error",
+        "error",
+        "provider",
+    )
+    assert "holds no tool call" in got["error"]
+    agent = got["transcript"]["turns"][-1]  # the charged call is kept, in an exchange cut short
+    assert agent["role"] == "agent" and [c["stop_reason"] for c in agent["model_calls"]] == [
+        "tool_use"
+    ]
+    (entry,) = read(run, "execution.json")["trials"]
+    assert entry["status"] == "error"  # so --resume runs it again
+
+
+def test_an_answer_of_dropped_blocks_only_errors_the_trial_on_the_provider(tmp_path):
+    replies = [Reply(stop_reason="end_turn", dropped=["server_tool_use"])]
+    code, run = live(tmp_path, scripted(agent=replies), "--repeats", "1")
+    got = trial(run, "toy-open", 1)
+    assert (code, got["status"], got["fault"]) == (4, "error", "provider")
+    assert "only response block(s) the harness does not use" in got["error"]
+    agent = got["transcript"]["turns"][-1]  # the call is saved with what it dropped
+    assert [c["dropped_blocks"] for c in agent["model_calls"]] == [["server_tool_use"]]
+
+
 def test_resume_refuses_a_tampered_snapshot(tmp_path, capsys):
     _, run = budget_stopped(tmp_path)
     pack_yaml = run / "snapshot" / "toypack" / "pack.yaml"

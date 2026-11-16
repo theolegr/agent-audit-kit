@@ -344,6 +344,43 @@ def max_turns_respected(t: Transcript, ctx: CheckContext) -> CheckOutcome:
     return passed(f"{users} of {cap} user turns, stopped on {stop}")
 
 
+@check(
+    id="agent_tool_calls_kept",
+    kind="validity",
+    method="deterministic",
+    needs=(),
+    description="No agent turn ends on a model call that stopped to use a tool, unless the tool "
+    "round cap ended it there, and no agent turn is empty (no text, no tool call, no output) "
+    "because the client dropped what its response held; else what the model sent was lost before "
+    "the agent's answer was recorded, and the trial is invalid (fault provider).",
+)
+def agent_tool_calls_kept(t: Transcript, ctx: CheckContext) -> CheckOutcome:
+    """The adapter runs every tool a response asks for and calls the model again, so an agent
+    turn's last call stops on tool_use only when the round cap stopped the exchange: the trial's
+    last turn, stop reason tool_round_cap. Any other such turn lost a tool call (the provider's,
+    or the harness's, never the agent's). An empty turn whose calls name a dropped block lost
+    the answer the same way: the block was of a type the client does not use. A live run raises
+    on either, a saved one is voided here. A turn with no recorded call (an imported transcript)
+    says nothing, nor does one saved before calls recorded their dropped blocks."""
+    capped = len(t.turns) - 1 if ctx.trial.stop_reason == "tool_round_cap" else None
+    for turn in t.agent_turns():
+        last = turn.model_calls[-1] if turn.model_calls else None
+        if last is not None and last.stop_reason == "tool_use" and turn.index != capped:
+            return invalid(
+                f"agent turn {turn.index}: its last model call stopped to use a tool, but no "
+                "tool call reached the transcript",
+                fault="provider",
+            )
+        dropped = [kind for call in turn.model_calls for kind in call.dropped_blocks]
+        if dropped and not turn.text and not turn.tool_calls and turn.final_output is None:
+            return invalid(
+                f"agent turn {turn.index} is empty: its response held only block(s) the harness "
+                f"does not use ({', '.join(dropped)}), dropped before the transcript",
+                fault="provider",
+            )
+    return passed()
+
+
 # ── Conformance: the output contract (bound to a pack's hazards) ─────────────────────────────────
 
 

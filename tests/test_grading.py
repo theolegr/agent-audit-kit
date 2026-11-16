@@ -162,6 +162,7 @@ def test_a_trial_every_check_passes_is_valid_with_its_parsed_outcome(pack):
     assert graded.status == "valid" and graded.reasons == []
     assert graded.outcome == {"status": "open"}
     assert [(r.check_id, r.outcome) for r in graded.results] == [
+        ("core.agent_tool_calls_kept", "pass"),
         ("core.conversation_completed", "pass"),
         ("core.max_turns_respected", "pass"),
         ("core.output_schema_valid", "pass"),

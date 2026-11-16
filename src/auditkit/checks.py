@@ -138,7 +138,9 @@ def failed(note: str, turn: int) -> CheckOutcome:
     return CheckOutcome(outcome="fail", note=note, evidence_turn=turn, fault="agent")
 
 
-def invalid(note: str, fault: Literal["simulator", "test_data"] = "simulator") -> CheckOutcome:
+def invalid(
+    note: str, fault: Literal["simulator", "test_data", "provider"] = "simulator"
+) -> CheckOutcome:
     return CheckOutcome(outcome="invalid", note=note, fault=fault)
 
 
