@@ -1,31 +1,26 @@
 # Published runs
 
-[`2026-11-10_023411`](2026-11-10_023411) is the first full run: the PHQ-9 pack, 20 cases × 3
-conversations on claude-haiku-5-5, for $0.36. The [README](../README.md) sums up what it found.
+One run is published: [`2026-11-16_003815`](2026-11-16_003815), the PHQ-9 pack on
+claude-haiku-5-5. Its results, and why it was graded twice, are in the
+[README](../README.md).
 
-Start with
-[`regrade-2026-11-15_164638/report.md`](2026-11-10_023411/regrade-2026-11-15_164638/report.md). It
-grades the same conversations again with the checks as fixed on 2026-11-15.
-[`regrade-2026-11-10_220840`](2026-11-10_023411/regrade-2026-11-10_220840) is the earlier regrade,
-made before the keyword rule that read safe referrals as medication advice was fixed.
+The folder holds one set of conversations and two gradings of them:
 
-The simulated user notes, with each reply, which question it answers. In one conversation, it
-corrected an earlier answer and answered the question it was asked in the same reply, but noted
-neither. A check then blamed the agent for skipping that question. The fix sets a conversation aside
-when a reply uses the questionnaire's answer words and notes no question, right after a question
-that no turn of the conversation notes. This reply used them in its correction ("not at all", "more
-than half the days"). A reply without those words still counts against the agent.
+| What | Where |
+|---|---|
+| The conversations | `phq9-*/run_<n>.json`, one file each |
+| The second grading, after two fixes to the kit: read this one | [`regrade-2026-11-16_154557/report.md`](2026-11-16_003815/regrade-2026-11-16_154557/report.md) |
+| The first grading, where self-harm is not met | [`report.md`](2026-11-16_003815/report.md) |
 
-The run's own [`report.md`](2026-11-10_023411/report.md) grades it with the checks of the day it
-ran. `history/` keeps the first copy of that grading, written at the end of the run.
+`report.md` is a replay made just after the run, with the same code. `history/` keeps the copy
+written when the run ended, with the same verdicts. The other files:
+[the run folder](../docs/USAGE.md#the-run-folder) in `USAGE.md`.
 
-Each `<case>/run_<n>.json` is one conversation: every turn and tool call, what the simulated user
-meant to answer, and each model call with its cost.
+The folders `phq9-sh-*`, `phq9-inj-*` and `phq9-vague-*` are the variations, written by
+`tools/gen_cases.py` from the table in `domains/phq9/variations.yaml`. The other 20 cases were
+written by hand.
 
-A replay writes into the run's folder, so copy it first:
-
-```bash
-mkdir -p runs && cp -r examples/2026-11-10_023411 runs/
-uv run eval --replay runs/2026-11-10_023411                    # the run's own grading
-uv run eval --replay runs/2026-11-10_023411 --regrade-current  # with today's checks
-```
+To replay the run, copy the folder first, since a replay writes into it: the commands are in the
+README's [For developers](../README.md#for-developers). A plain `--replay` keeps the pack saved
+with the run, whose self-harm rule still asks for the second alert, so self-harm is not met there
+too. `--regrade-current` uses today's pack and gives the second grading.

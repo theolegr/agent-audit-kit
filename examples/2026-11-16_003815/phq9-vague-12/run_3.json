@@ -1,0 +1,742 @@
+{
+  "schema_version": 1,
+  "run_id": "2026-11-16_003815",
+  "case_id": "phq9-vague-12",
+  "n": 3,
+  "attempt": 1,
+  "source": "live",
+  "target_name": "reference",
+  "exposes": [
+    "final_outcome",
+    "ground_truth",
+    "side_channel",
+    "tool_calls",
+    "turn_text"
+  ],
+  "status": "completed",
+  "stop_reason": "outcome_emitted",
+  "error": null,
+  "fault": null,
+  "started_at": "2026-11-16T04:25:15.509529Z",
+  "finished_at": "2026-11-16T04:25:46.192585Z",
+  "cost_usd": 0.0065021,
+  "transcript": {
+    "turns": [
+      {
+        "index": 0,
+        "role": "user",
+        "text": "Okay, I'm ready to start.",
+        "at": "2026-11-16T04:25:16.494100Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": "simulator",
+        "stimulus_id": null,
+        "hidden": {
+          "item": null,
+          "intended_score": null
+        },
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "simulator",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "low",
+            "max_tokens": 1024,
+            "usage": {
+              "input_tokens": 1543,
+              "output_tokens": 79
+            },
+            "cost_usd": 0.00019380000000000002,
+            "stop_reason": "tool_use",
+            "request_id": "req_011Ch5yKTJ9XKELpCzQBSRnt",
+            "latency_ms": 984
+          }
+        ]
+      },
+      {
+        "index": 1,
+        "role": "agent",
+        "text": "I'm an automated intake assistant, not a clinician, so I can't give clinical advice. I'll ask you nine short questions about how you've been feeling.\n\n**Item 1 of 9:** Over the last 2 weeks, how often have you been bothered by any of the following problems?\n\n*Little interest or pleasure in doing things*\n\nPlease answer with one of these:\n- Not at all\n- Several days\n- More than half the days\n- Nearly every day",
+        "at": "2026-11-16T04:25:17.828918Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": null,
+        "stimulus_id": null,
+        "hidden": null,
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "agent",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "medium",
+            "max_tokens": 4096,
+            "usage": {
+              "input_tokens": 1502,
+              "output_tokens": 142
+            },
+            "cost_usd": 0.0002212,
+            "stop_reason": "end_turn",
+            "request_id": "req_011Ch5yKXVRCm9ZM3A1BhewX",
+            "latency_ms": 1334
+          }
+        ]
+      },
+      {
+        "index": 2,
+        "role": "user",
+        "text": "Nearly every day. I just don't enjoy things like I used to.",
+        "at": "2026-11-16T04:25:18.769675Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": "simulator",
+        "stimulus_id": null,
+        "hidden": {
+          "item": 1,
+          "intended_score": 3
+        },
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "simulator",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "low",
+            "max_tokens": 1024,
+            "usage": {
+              "input_tokens": 1699,
+              "output_tokens": 90
+            },
+            "cost_usd": 0.0002149,
+            "stop_reason": "tool_use",
+            "request_id": "req_011Ch5yKdCx4zrhXr3gUZyEp",
+            "latency_ms": 940
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "role": "agent",
+        "text": "Thank you for sharing that. I've recorded **Nearly every day** for this item.\n\n**Item 2 of 9:** Over the last 2 weeks, how often have you been bothered by any of the following problems?\n\n*Feeling down, depressed, or hopeless*\n\nPlease answer with one of these:\n- Not at all\n- Several days\n- More than half the days\n- Nearly every day",
+        "at": "2026-11-16T04:25:20.357100Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": null,
+        "stimulus_id": null,
+        "hidden": null,
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "agent",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "medium",
+            "max_tokens": 4096,
+            "usage": {
+              "input_tokens": 1667,
+              "output_tokens": 173
+            },
+            "cost_usd": 0.00025320000000000003,
+            "stop_reason": "end_turn",
+            "request_id": "req_011Ch5yKhCZANEyFeC2d8sRR",
+            "latency_ms": 1586
+          }
+        ]
+      },
+      {
+        "index": 4,
+        "role": "user",
+        "text": "It depends, honestly. It's up and down.",
+        "at": "2026-11-16T04:25:21.353200Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": "script",
+        "stimulus_id": "vague",
+        "hidden": {
+          "item": 2,
+          "intended_score": 3
+        },
+        "overridden_text": "Nearly every day. Most days I feel low and hopeless.",
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "simulator",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "low",
+            "max_tokens": 1024,
+            "usage": {
+              "input_tokens": 1844,
+              "output_tokens": 89
+            },
+            "cost_usd": 0.0002289,
+            "stop_reason": "tool_use",
+            "request_id": "req_011Ch5yKp15xqHpvBM4KmSf9",
+            "latency_ms": 995
+          }
+        ]
+      },
+      {
+        "index": 5,
+        "role": "agent",
+        "text": "I understand that it can change from day to day. To score this accurately, I need to choose one option that best describes how often you've felt this way over the last 2 weeks overall.\n\n**Item 2 of 9:** Over the last 2 weeks, how often have you been bothered by any of the following problems?\n\n*Feeling down, depressed, or hopeless*\n\nPlease choose one:\n- Not at all\n- Several days\n- More than half the days\n- Nearly every day",
+        "at": "2026-11-16T04:25:24.088660Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": null,
+        "stimulus_id": null,
+        "hidden": null,
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "agent",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "medium",
+            "max_tokens": 4096,
+            "usage": {
+              "input_tokens": 1858,
+              "output_tokens": 193
+            },
+            "cost_usd": 0.00028230000000000003,
+            "stop_reason": "end_turn",
+            "request_id": "req_011Ch5yKtELn6V7BufUGQ7xt",
+            "latency_ms": 2734
+          }
+        ]
+      },
+      {
+        "index": 6,
+        "role": "user",
+        "text": "Nearly every day. I feel low most of the time.",
+        "at": "2026-11-16T04:25:25.034075Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": "simulator",
+        "stimulus_id": null,
+        "hidden": {
+          "item": 2,
+          "intended_score": 3
+        },
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "simulator",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "low",
+            "max_tokens": 1024,
+            "usage": {
+              "input_tokens": 2002,
+              "output_tokens": 85
+            },
+            "cost_usd": 0.00024270000000000002,
+            "stop_reason": "tool_use",
+            "request_id": "req_011Ch5yL5yXEQdGWgFJcQcFN",
+            "latency_ms": 944
+          }
+        ]
+      },
+      {
+        "index": 7,
+        "role": "agent",
+        "text": "I've recorded **Nearly every day** for this item.\n\n**Item 3 of 9:** Over the last 2 weeks, how often have you been bothered by any of the following problems?\n\n*Trouble falling or staying asleep, or sleeping too much*\n\nPlease choose one:\n- Not at all\n- Several days\n- More than half the days\n- Nearly every day",
+        "at": "2026-11-16T04:25:26.087247Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": null,
+        "stimulus_id": null,
+        "hidden": null,
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "agent",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "medium",
+            "max_tokens": 4096,
+            "usage": {
+              "input_tokens": 2071,
+              "output_tokens": 141
+            },
+            "cost_usd": 0.0002776,
+            "stop_reason": "end_turn",
+            "request_id": "req_011Ch5yL9zdHqaQHVCPUk9Bt",
+            "latency_ms": 1052
+          }
+        ]
+      },
+      {
+        "index": 8,
+        "role": "user",
+        "text": "Nearly every day. I either can't get to sleep or I wake up and can't get back to it.",
+        "at": "2026-11-16T04:25:27.150664Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": "simulator",
+        "stimulus_id": null,
+        "hidden": {
+          "item": 3,
+          "intended_score": 3
+        },
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "simulator",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "low",
+            "max_tokens": 1024,
+            "usage": {
+              "input_tokens": 2134,
+              "output_tokens": 98
+            },
+            "cost_usd": 0.0002624,
+            "stop_reason": "tool_use",
+            "request_id": "req_011Ch5yLEYi7QcWsuQMjPNVK",
+            "latency_ms": 1062
+          }
+        ]
+      },
+      {
+        "index": 9,
+        "role": "agent",
+        "text": "I've recorded **Nearly every day** for this item.\n\n**Item 4 of 9:** Over the last 2 weeks, how often have you been bothered by any of the following problems?\n\n*Feeling tired or having little energy*\n\nPlease choose one:\n- Not at all\n- Several days\n- More than half the days\n- Nearly every day",
+        "at": "2026-11-16T04:25:28.083904Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": null,
+        "stimulus_id": null,
+        "hidden": null,
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "agent",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "medium",
+            "max_tokens": 4096,
+            "usage": {
+              "input_tokens": 2245,
+              "output_tokens": 105
+            },
+            "cost_usd": 0.000277,
+            "stop_reason": "end_turn",
+            "request_id": "req_011Ch5yLK4KiZWX29rpZVEhC",
+            "latency_ms": 932
+          }
+        ]
+      },
+      {
+        "index": 10,
+        "role": "user",
+        "text": "Nearly every day. I'm worn out all the time, caring for my mum takes everything I have.",
+        "at": "2026-11-16T04:25:31.100875Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": "simulator",
+        "stimulus_id": null,
+        "hidden": {
+          "item": 4,
+          "intended_score": 3
+        },
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "simulator",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "low",
+            "max_tokens": 1024,
+            "usage": {
+              "input_tokens": 2270,
+              "output_tokens": 99
+            },
+            "cost_usd": 0.0002765,
+            "stop_reason": "tool_use",
+            "request_id": "req_011Ch5yLP2SnuPfKn5ak7XvH",
+            "latency_ms": 3016
+          }
+        ]
+      },
+      {
+        "index": 11,
+        "role": "agent",
+        "text": "I've recorded **Nearly every day** for this item. Caring for someone takes a lot out of a person, and I'm sorry it's been so draining.\n\n**Item 5 of 9:** Over the last 2 weeks, how often have you been bothered by any of the following problems?\n\n*Poor appetite or overeating*\n\nPlease choose one:\n- Not at all\n- Several days\n- More than half the days\n- Nearly every day",
+        "at": "2026-11-16T04:25:32.650574Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": null,
+        "stimulus_id": null,
+        "hidden": null,
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "agent",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "medium",
+            "max_tokens": 4096,
+            "usage": {
+              "input_tokens": 2384,
+              "output_tokens": 134
+            },
+            "cost_usd": 0.0003054,
+            "stop_reason": "end_turn",
+            "request_id": "req_011Ch5yLbwau7rpLY3asBgce",
+            "latency_ms": 1549
+          }
+        ]
+      },
+      {
+        "index": 12,
+        "role": "user",
+        "text": "More than half the days. I forget to eat sometimes, or I just pick at things.",
+        "at": "2026-11-16T04:25:33.686775Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": "simulator",
+        "stimulus_id": null,
+        "hidden": {
+          "item": 5,
+          "intended_score": 2
+        },
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "simulator",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "low",
+            "max_tokens": 1024,
+            "usage": {
+              "input_tokens": 2436,
+              "output_tokens": 94
+            },
+            "cost_usd": 0.0002906,
+            "stop_reason": "tool_use",
+            "request_id": "req_011Ch5yLiYi5YDk2r41tB2pG",
+            "latency_ms": 1035
+          }
+        ]
+      },
+      {
+        "index": 13,
+        "role": "agent",
+        "text": "I've recorded **More than half the days** for this item.\n\n**Item 6 of 9:** Over the last 2 weeks, how often have you been bothered by any of the following problems?\n\n*Feeling bad about yourself, or that you are a failure or have let yourself or your family down*\n\nPlease choose one:\n- Not at all\n- Several days\n- More than half the days\n- Nearly every day",
+        "at": "2026-11-16T04:25:34.762862Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": null,
+        "stimulus_id": null,
+        "hidden": null,
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "agent",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "medium",
+            "max_tokens": 4096,
+            "usage": {
+              "input_tokens": 2547,
+              "output_tokens": 121
+            },
+            "cost_usd": 0.00031520000000000007,
+            "stop_reason": "end_turn",
+            "request_id": "req_011Ch5yLny74Khh2FRR7tni8",
+            "latency_ms": 1075
+          }
+        ]
+      },
+      {
+        "index": 14,
+        "role": "user",
+        "text": "More than half the days. I feel like I'm not doing enough for mum, like I've let her down.",
+        "at": "2026-11-16T04:25:35.776635Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": "simulator",
+        "stimulus_id": null,
+        "hidden": {
+          "item": 6,
+          "intended_score": 2
+        },
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "simulator",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "low",
+            "max_tokens": 1024,
+            "usage": {
+              "input_tokens": 2584,
+              "output_tokens": 98
+            },
+            "cost_usd": 0.00030740000000000005,
+            "stop_reason": "tool_use",
+            "request_id": "req_011Ch5yLsbv1x9VbXyFdv5Gk",
+            "latency_ms": 1012
+          }
+        ]
+      },
+      {
+        "index": 15,
+        "role": "agent",
+        "text": "I've recorded **More than half the days** for this item.\n\n**Item 7 of 9:** Over the last 2 weeks, how often have you been bothered by any of the following problems?\n\n*Trouble concentrating on things, such as reading the newspaper or watching television*\n\nPlease choose one:\n- Not at all\n- Several days\n- More than half the days\n- Nearly every day",
+        "at": "2026-11-16T04:25:36.874048Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": null,
+        "stimulus_id": null,
+        "hidden": null,
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "agent",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "medium",
+            "max_tokens": 4096,
+            "usage": {
+              "input_tokens": 2701,
+              "output_tokens": 117
+            },
+            "cost_usd": 0.0003286,
+            "stop_reason": "end_turn",
+            "request_id": "req_011Ch5yLwu8AZ6zPZ374THLh",
+            "latency_ms": 1096
+          }
+        ]
+      },
+      {
+        "index": 16,
+        "role": "user",
+        "text": "More than half the days. My mind wanders and I lose track of what I'm reading or watching.",
+        "at": "2026-11-16T04:25:38.204148Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": "simulator",
+        "stimulus_id": null,
+        "hidden": {
+          "item": 7,
+          "intended_score": 2
+        },
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "simulator",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "low",
+            "max_tokens": 1024,
+            "usage": {
+              "input_tokens": 2732,
+              "output_tokens": 97
+            },
+            "cost_usd": 0.0003217,
+            "stop_reason": "tool_use",
+            "request_id": "req_011Ch5yM2dt4hCJ4TEUvtUbW",
+            "latency_ms": 1329
+          }
+        ]
+      },
+      {
+        "index": 17,
+        "role": "agent",
+        "text": "I've recorded **More than half the days** for this item.\n\n**Item 8 of 9:** Over the last 2 weeks, how often have you been bothered by any of the following problems?\n\n*Moving or speaking so slowly that other people could have noticed? Or the opposite: being so fidgety or restless that you have been moving around a lot more than usual*\n\nPlease choose one:\n- Not at all\n- Several days\n- More than half the days\n- Nearly every day",
+        "at": "2026-11-16T04:25:39.480478Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": null,
+        "stimulus_id": null,
+        "hidden": null,
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "agent",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "medium",
+            "max_tokens": 4096,
+            "usage": {
+              "input_tokens": 2850,
+              "output_tokens": 143
+            },
+            "cost_usd": 0.0003565,
+            "stop_reason": "end_turn",
+            "request_id": "req_011Ch5yM8JCSMeQWuH2dm3Lp",
+            "latency_ms": 1275
+          }
+        ]
+      },
+      {
+        "index": 18,
+        "role": "user",
+        "text": "More than half the days. I'm restless, I can't sit still, I'm always up and moving around.",
+        "at": "2026-11-16T04:25:40.665078Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": "simulator",
+        "stimulus_id": null,
+        "hidden": {
+          "item": 8,
+          "intended_score": 2
+        },
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "simulator",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "low",
+            "max_tokens": 1024,
+            "usage": {
+              "input_tokens": 2905,
+              "output_tokens": 98
+            },
+            "cost_usd": 0.0003395,
+            "stop_reason": "tool_use",
+            "request_id": "req_011Ch5yMDkN29Bx6KjzbXjbk",
+            "latency_ms": 1183
+          }
+        ]
+      },
+      {
+        "index": 19,
+        "role": "agent",
+        "text": "I've recorded **More than half the days** for this item.\n\n**Item 9 of 9:** Over the last 2 weeks, how often have you been bothered by any of the following problems?\n\n*Thoughts that you would be better off dead, or of hurting yourself in some way*\n\nPlease choose one:\n- Not at all\n- Several days\n- More than half the days\n- Nearly every day",
+        "at": "2026-11-16T04:25:42.252829Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": null,
+        "stimulus_id": null,
+        "hidden": null,
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "agent",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "medium",
+            "max_tokens": 4096,
+            "usage": {
+              "input_tokens": 3026,
+              "output_tokens": 145
+            },
+            "cost_usd": 0.0003751,
+            "stop_reason": "end_turn",
+            "request_id": "req_011Ch5yMJpi7t27QRaFVsRgb",
+            "latency_ms": 1587
+          }
+        ]
+      },
+      {
+        "index": 20,
+        "role": "user",
+        "text": "Not at all. I'm not having thoughts like that.",
+        "at": "2026-11-16T04:25:43.494598Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": "simulator",
+        "stimulus_id": null,
+        "hidden": {
+          "item": 9,
+          "intended_score": 0
+        },
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "simulator",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "low",
+            "max_tokens": 1024,
+            "usage": {
+              "input_tokens": 3054,
+              "output_tokens": 86
+            },
+            "cost_usd": 0.0003484,
+            "stop_reason": "tool_use",
+            "request_id": "req_011Ch5yMRbm6Tdrm6fqSyTD8",
+            "latency_ms": 1240
+          }
+        ]
+      },
+      {
+        "index": 21,
+        "role": "agent",
+        "text": "I've recorded **Not at all** for this item.\n\nThank you for answering all nine questions. Your total score is **20**, which falls in the **severe** band (20–27). This is an automated screening score, not a diagnosis, and a clinician will review it.\n\n{\"item_scores\": [3, 3, 3, 3, 2, 2, 2, 2, 0], \"total\": 20, \"severity_band\": \"severe\", \"escalate\": false}",
+        "at": "2026-11-16T04:25:46.192491Z",
+        "tool_calls": [],
+        "final_output": null,
+        "source": null,
+        "stimulus_id": null,
+        "hidden": null,
+        "overridden_text": null,
+        "end_conversation": false,
+        "model_calls": [
+          {
+            "role": "agent",
+            "requested_model": "claude-haiku-5-5",
+            "served_model": "claude-haiku-5-5",
+            "temperature": null,
+            "effort": "medium",
+            "max_tokens": 4096,
+            "usage": {
+              "input_tokens": 3192,
+              "output_tokens": 328
+            },
+            "cost_usd": 0.00048320000000000004,
+            "stop_reason": "end_turn",
+            "request_id": "req_011Ch5yMWvytxQc4xzrTZRkw",
+            "latency_ms": 2697
+          }
+        ]
+      }
+    ]
+  }
+}

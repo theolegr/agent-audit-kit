@@ -72,7 +72,8 @@ estimate: {exchanges: 3, tokens_per_exchange: 40, output_tokens_per_call: 60, sy
 `estimate` feeds the cost estimate printed before every run, and by `--lint`. `exchanges` is the
 typical number of user turns per trial, `tokens_per_exchange` how much the conversation grows each
 turn, `output_tokens_per_call` the typical answer, and `system_tokens` the system prompt (default
-800). The worst case uses `max_turns` instead of `exchanges`. Thinking tokens are not counted.
+800). The worst case uses `max_turns` instead of `exchanges`. What the estimate leaves out: the
+[Cost](USAGE.md#cost) section of `USAGE.md`.
 
 ## 4. Hazards and cases
 
@@ -469,15 +470,10 @@ tool_policy: {own_account_only: true}
 
 ## 7. Running a pack
 
-```bash
-uv run eval --lint <name>                          # every lint issue + the cost estimate; no API call
-uv run eval --domain <name> --repeats 1 --cases <id>   # a live smoke run: costs money
-uv run eval --replay runs/<timestamp>              # re-grade the saved transcripts; no API call
-```
-
-A pack outside this repository runs with `--packs-dir DIR` (its `depends_on` packs sit in the same
-folder). `--variant` and `--target` select the variant and the target. See [`USAGE.md`](USAGE.md) for setup
-and cost.
+A pack runs like the PHQ-9 one: the lint, a live run and a replay are in [`USAGE.md`](USAGE.md),
+with setup and cost, and the checklist (§10) gives the order. A pack outside this repository runs
+with `--packs-dir DIR` (its `depends_on` packs sit in the same folder). `--variant` and `--target`
+select the variant and the target.
 
 ## 8. Variants, dependencies, names and the content hash
 
@@ -622,10 +618,5 @@ three hazards, two cases, a variant, a dependency, a sibling module, two tools (
 checks of its own (one imported) and two bound core checks. One case holds a tool-result
 injection, a scripted request and a forbidden string.
 
-**The proof** that this needs no core change is `tests/test_core_boundary.py`. Tests 1 to 4 read the
-core's source and fail if it imports pack code, names a pack, imports the model SDK outside its
-client module, or lets the grading path reach the model runtime. Test 5,
-`test_toy_pack_runs_end_to_end_with_scripted_llm`, runs the toy pack through the live command
-(`--domain toypack --packs-dir tests/fixtures/packs`) with a scripted model. The toy pack lives
-outside `domains/`, and the core has never heard of it. The test gets a report and a verdict for
-each of its hazards.
+**A new pack needs no core change**: `tests/test_core_boundary.py` checks that the core never
+imports or names a pack, and runs the toy pack, which the core has never heard of, end to end.

@@ -4,8 +4,10 @@
 > a depression measure, not a suicide-risk assessment; nothing here is clinical advice or a medical
 > device.*
 
-The reference for running the kit. The [README](../README.md) gives the overview and the first
-run's results. Writing a pack for your own domain: [`DOMAIN_PACKS.md`](DOMAIN_PACKS.md).
+The reference for running the kit. The [README](../README.md) gives the overview and the published
+run's results. The core is the same for every domain; each domain is a pack, a folder with the
+agent's prompt and tools, its risks, its cases and its rules. `--domain phq9` picks the first one,
+a PHQ-9 intake agent. Writing a pack for your own domain: [`DOMAIN_PACKS.md`](DOMAIN_PACKS.md).
 
 ## How a verdict is reached
 
@@ -26,15 +28,10 @@ The kit applies methods from regulated QA (ISO 14971 style): hazard → risk con
    simulated user that drifted from its case, or a test input never delivered, says nothing about
    the agent.
 5. **Verdicts with their evidence.** Per hazard, over distinct cases (never pooled repeats): the
-   observed failure rate, an exact (Clopper-Pearson) upper bound, and a verdict against the declared
-   criterion. The verdict is *met*, *not met*, *not demonstrated* or *not evaluable*, with how many
-   more failure-free cases it still needs.
+   observed failure rate, an upper bound on it, and a verdict against the declared criterion. The
+   rule is in the pack guide, under [Hazards and cases](DOMAIN_PACKS.md#4-hazards-and-cases).
 6. **Replayable evidence.** Every run keeps its transcripts and a byte copy of the pack. A replay
    re-grades them with no API call, so anyone can check a report against its run folder.
-
-The core is domain-agnostic. Each domain is a plug-in **pack**. Pack #1 is a PHQ-9 intake agent: it
-administers a depression questionnaire to a synthetic adult, scores it, and must escalate self-harm
-signals to a clinician.
 
 ## Setup
 
@@ -98,10 +95,17 @@ runs/<timestamp>/
 ├── manifest.json        # what ran: the models, and fingerprints of the prompt, suite and criteria
 ├── execution.json       # its status, the money spent, and a hash of each transcript
 ├── snapshot/phq9/       # a byte copy of the pack as it was run
+├── lint.json            # the lint's warnings at the start of the run
+├── expectations.json    # the right answers derived for each case, such as its total and band
 ├── <case>/run_<n>.json  # one transcript per trial: raw evidence, written once
 ├── results.json         # every check result, per-case statistics, per-hazard verdicts
-└── report.md            # the risk-based evaluation report
+├── report.md            # the risk-based evaluation report
+├── history/<time>/      # the earlier results.json and report.md, after a replay
+└── regrade-<time>/      # results.json and report.md from a regrade with today's pack
 ```
+
+A transcript holds every turn and tool call, what the simulated user meant to answer, and each
+model call with its cost.
 
 ## Replay and regrade
 
@@ -161,7 +165,7 @@ cap is not made, and the trials already completed are kept.
 `uv run eval --lint <pack>` prints the estimate for free, per role, typical and worst case. For the
 current PHQ-9 pack (177 cases × 3 repeats), it says about $4.68 typical and $9.56 worst case. That
 is above the $3.00 default cap, so a full run needs `--budget-usd`. It does not count thinking
-tokens. The first full run, on 20 cases, cost $0.36.
+tokens. The published run, 531 conversations, cost $3.36.
 
 ## Exit codes
 

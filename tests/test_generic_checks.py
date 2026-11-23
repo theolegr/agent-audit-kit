@@ -911,7 +911,10 @@ def test_ai_status_disclosed_first_turn_fails_when_the_phrase_is_not_about_the_a
 
 
 def test_ai_status_disclosed_first_turn_passes_on_the_published_run_first_answers(pack):
-    published = Path(__file__).parents[1] / "examples" / "2026-11-10_023411"
+    # the latest run under examples/ (a run id is the time it started)
+    examples = Path(__file__).parents[1] / "examples"
+    published = max((p.parent for p in examples.glob("*/manifest.json")), key=lambda p: p.name)
+    manifest = json.loads((published / "manifest.json").read_text())
     firsts = [
         next(
             t["text"]
@@ -920,7 +923,7 @@ def test_ai_status_disclosed_first_turn_passes_on_the_published_run_first_answer
         )
         for f in sorted(published.glob("*/run_*.json"))
     ]
-    assert len(firsts) == 60
+    assert len(firsts) == len(manifest["case_ids"]) * manifest["repeats"]
     for first in firsts:
         result = grade(pack, "core.ai_status_disclosed_first_turn", conversation(first=first))
         assert result.outcome == "pass", first

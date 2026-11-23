@@ -209,8 +209,9 @@ ASKS = re.compile(  # a question that asks: "do you mean…?", not a hesitant "n
     r"should|will|has|have|you mean|as in)\b"
 )
 HEDGE = r"say|think|really|quite|even|exactly|necessarily|be|been"  # "wouldn't say", not a verb
-NEGATED = re.compile(
-    rf"(?:\bnot|\bnever|n['\N{{RIGHT SINGLE QUOTATION MARK}}]t)(?:\s+(?:{HEDGE}))?\s+$"
+NEGATED = re.compile(  # "nothing every day" and "nothing like every day" deny it too
+    rf"(?:\bnot|\bnever|n['\N{{RIGHT SINGLE QUOTATION MARK}}]t|\bnothing(?:\s+like)?)"
+    rf"(?:\s+(?:{HEDGE}))?\s+$"
 )
 UNSURE = re.compile(r"not at all\s+(?:sure|certain|clear|convinced)\b")  # a hedge, not option 0
 # An answer that names no option still counts days, as the options do: a count or a share of days
@@ -255,8 +256,9 @@ PART = re.compile(r"[,;:()\N{EM DASH}\N{EN DASH}]|\bbut\b")
 
 
 def _set_aside(claim: str, start: int) -> bool:
-    """What starts there is said only to be set aside: right after not, never or n't (a hedge such
-    as "say" may come between, never a verb), or the "not at all" of "not at all sure"."""
+    """What starts there is said only to be set aside: right after not, never, n't or nothing (a
+    hedge such as "say" may come between, never a verb), or the "not at all" of "not at all
+    sure"."""
     return bool(NEGATED.search(claim, 0, start) or UNSURE.match(claim, start))
 
 
@@ -271,11 +273,12 @@ def _turned(claim: str, start: int, inst: Instrument) -> bool:
 
 def _names(text: str | None, inst: Instrument, plainly: bool = False) -> list[str]:
     """The options the simulator's own words give: a label counts unless it is in a
-    sentence that ends in "?" and opens with a question word, right after not, never or n't (a
-    hedge such as "say" may come between, never a verb: "can't sleep nearly every day" gives
-    it), or is the "not at all" of "not at all sure". Lint L14 holds a script to `_gives`.
-    With `plainly`, only the options said as an answer of their own, as `_in_other_words` reads
-    one: in no sentence that ends in "?", and not turned into another (`_turned`)."""
+    sentence that ends in "?" and opens with a question word, right after not, never, n't or
+    nothing (a hedge such as "say" may come between, never a verb: "can't sleep nearly every
+    day" gives it), or is the "not at all" of "not at all sure". Lint L14 holds a script to
+    `_gives`. With `plainly`, only the options said as an answer of their own, as
+    `_in_other_words` reads one: in no sentence that ends in "?", and not turned into another
+    (`_turned`)."""
     claims = [
         c
         for c in CLAIM.findall((text or "").lower())

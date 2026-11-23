@@ -824,10 +824,13 @@ def test_the_stylesheet_has_a_dark_theme_for_every_colour():
     assert colours and colours == set(re.findall(r"(--[a-z]+): #", dark.split("}\n}", 1)[0]))
 
 
-def test_the_readme_documents_the_local_page():
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+def test_the_usage_guide_documents_the_local_page_and_the_readme_points_to_it():
+    # the commands live in docs/USAGE.md, the reference; the README names the page and links it
+    usage = (ROOT / "docs" / "USAGE.md").read_text(encoding="utf-8")
     for flag in ("--ui", "--port", "--no-browser"):
-        assert flag in readme, flag
+        assert flag in usage, flag
+    readme = " ".join((ROOT / "README.md").read_text(encoding="utf-8").split())
+    assert "the local page and every option: [`docs/USAGE.md`](docs/USAGE.md)" in readme
 
 
 # ── After review ──────────────────────────────────────────────────────────────────────────────────
