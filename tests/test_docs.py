@@ -413,13 +413,13 @@ def test_readme_names_the_agent_the_published_run_tests():
 
 
 def test_readme_stays_short():
-    # the README is the short way in, the reference lives in docs/USAGE.md; the bound leaves room
-    # for the 13-word line that will link the page about the run
-    prose = README.split("```")[::2]  # outside the code blocks
+    # the README is the short way in, the reference lives in docs/USAGE.md; its words as a reader
+    # sees them: outside the code blocks, the HTML of the picture left out
+    prose = [re.sub(r"</?[A-Za-z][^<>]*>", " ", part) for part in README.split("```")[::2]]
     words = sum(1 for part in prose for run in part.split() if re.search(r"[^\W_]", run))
     # 991 with the failure told plainly (2026-11-22), 1045 with the same slip elsewhere
-    # (2026-11-23), plus the 13-word line
-    assert words <= 1058
+    # (2026-11-23), 1059 with the line to the page and the tests badge
+    assert words <= 1059
 
 
 def test_a_replay_of_the_published_run_gives_its_own_results(tmp_path):

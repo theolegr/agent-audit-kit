@@ -185,7 +185,8 @@ uv run pytest                                      # the harness's self-tests an
 uv run ruff check . && uv run ruff format --check .
 ```
 
-The tests never touch the network: a scripted model stands in for the API.
+The tests never touch the network: a scripted model stands in for the API. GitHub runs them,
+with the lint, on every push and pull request (`.github/workflows/tests.yml`).
 
 ## Repository layout
 
@@ -194,7 +195,8 @@ src/auditkit/   the domain-agnostic core: it never imports a pack
 domains/        domain packs: hazards, cases, targets, mocked tools, checks (domains/phq9/)
 docs/           USAGE.md (this file), DOMAIN_PACKS.md (how to write a pack), index.html (the run's page)
 tests/          the harness's self-tests; tests/fixtures/packs/toypack is the minimal pack
-tools/          gen_confusables.py (the look-alike table), gen_page.py (the page's grid and curve)
+tools/          gen_confusables.py (the look-alike table), gen_page.py (the page's grid and curve),
+                shoot_grid.py (docs/img/, the README's picture of that grid, with headless Chrome)
 examples/       published runs, with their transcripts, to replay (examples/README.md)
 runs/           run outputs (git-ignored)
 ```

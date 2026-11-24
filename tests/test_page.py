@@ -370,3 +370,68 @@ def test_a_model_id_reads_as_its_name():
     assert GEN.model_name("claude-sonnet-4-5-20250929") == "Claude Sonnet 4.5"  # dated id
     assert GEN.model_name("claude-opus-4-1") == "Claude Opus 4.1"
     assert GEN.model_name("local-model") == "Local Model"  # no version
+
+
+def shooter():
+    spec = importlib.util.spec_from_file_location("shoot_grid", ROOT / "tools" / "shoot_grid.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+SHOOT = shooter()
+PAGES = "https://theolegr.github.io/agent-audit-kit/"  # where GitHub Pages serves this page
+
+
+def test_the_readme_pictures_show_the_grid_the_page_shows():
+    # each picture names the hash of the HTML it was shot from: a new run, or any change to the
+    # page's grid, legend or styles, makes it stale until tools/shoot_grid.py shoots it again
+    assert SHOOT.stale(PAGE) == [], "the README's pictures are stale: run tools/shoot_grid.py"
+    for theme in SHOOT.THEMES:
+        assert SHOOT.path_of(theme).stat().st_size < 1_000_000  # the export's size cap
+
+
+def test_a_change_to_the_grid_or_a_theme_makes_its_pictures_stale():
+    light, dark = (str(SHOOT.path_of(t).relative_to(ROOT)) for t in ("light", "dark"))
+    grid = PAGE.replace("Risks by invented user", "Risks by user", 1)
+    assert sorted(SHOOT.stale(grid)) == sorted([light, dark])
+    # the dark colours only: the light picture still holds
+    dark_only = PAGE.replace("--met: #4CC38A", "--met: #4CC38B", 1)
+    assert dark_only != PAGE and SHOOT.stale(dark_only) == [dark]
+
+
+def test_a_picture_carries_one_stamp_and_reads_it_back():
+    png = SHOOT.path_of("light").read_bytes()
+    again = SHOOT.stamped(SHOOT.stamped(png, "a" * 64), "b" * 64)
+    assert SHOOT.source_hash(again) == "b" * 64
+    assert again.count(SHOOT.KEY + b"\0") == 1
+    assert [kind for kind, *_ in SHOOT.chunks(again)][:2] == [b"IHDR", b"tEXt"]
+
+
+def test_the_readme_opens_on_the_picture_linked_to_the_page():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    top = readme[: readme.index("\n## ")]
+    # each tag on its own line, a blank line before and after: on one line, "<a ...><picture>"
+    # opens no HTML block on GitHub, so the link and the picture come apart and the dark picture
+    # never shows; with no blank line before, the same; with none after, the next line shows raw
+    picture = re.search(r'(?s)\n\n<a href="([^"]+)">\n<picture>\n(.*?)\n</picture>\n</a>\n\n', top)
+    assert picture and picture[1] == PAGES
+    lines = [line.strip() for line in picture[2].splitlines()]
+    assert [line.split()[0] for line in lines] == ["<source", "<img"]
+    assert 'media="(prefers-color-scheme: dark)" srcset="docs/img/grid-dark.png"' in picture[2]
+    assert 'src="docs/img/grid-light.png"' in picture[2]
+    assert re.search(r'<img alt="[^"]{20,}"', picture[2])  # said in words for a screen reader
+
+
+def test_the_readme_links_the_page():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    top = readme[: readme.index("\n## ")]
+    assert f"**[The latest run and the method, in pictures]({PAGES})**" in top
+
+
+def test_the_readme_carries_the_badge_of_the_tests_on_github():
+    # the workflow in .github/workflows/tests.yml, which runs them on every push
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    top = readme[: readme.index("\n## ")]
+    workflow = "https://github.com/theolegr/agent-audit-kit/actions/workflows/tests.yml"
+    assert f"[![tests]({workflow}/badge.svg)]({workflow})" in top

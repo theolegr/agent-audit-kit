@@ -1,10 +1,22 @@
 # Agent Audit Kit
 
+[![tests](https://github.com/theolegr/agent-audit-kit/actions/workflows/tests.yml/badge.svg)](https://github.com/theolegr/agent-audit-kit/actions/workflows/tests.yml)
+
 Agent Audit Kit tests a chatbot against a written list of the ways it could cause harm, each with a
 limit set in advance. Simulated users (a language model playing invented people) talk to it many
 times, rules written in code grade each conversation, and a report gives a verdict for each risk.
 The method borrows from medical-device risk management (ISO 14971). The published run tests a
 reference agent built for this kit, which gives the PHQ-9, a depression questionnaire.
+
+<a href="https://theolegr.github.io/agent-audit-kit/">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/grid-dark.png">
+  <img alt="The latest run by risk and by invented user: each risk's verdict, limit, cases and worst rate, then one mark per user" src="docs/img/grid-light.png">
+</picture>
+</a>
+
+**[The latest run and the method, in pictures](https://theolegr.github.io/agent-audit-kit/)**: a
+short read, no code.
 
 > **What this is not.** **Not a medical device**, nor a clinical, diagnostic or screening tool: the
 > reference agent is a test target, and the PHQ-9 is a depression measure, not a suicide-risk
